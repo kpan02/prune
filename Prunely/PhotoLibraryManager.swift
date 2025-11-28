@@ -8,13 +8,34 @@ import PhotosUI
 import Combine
 import AppKit
 
+struct MonthAlbum: Identifiable {
+    let id: String
+    let title: String
+    let date: Date
+    let photos: [PHAsset]
+    
+    var coverPhoto: PHAsset? {
+        photos.first
+    }
+    
+    var photoCount: Int {
+        photos.count
+    }
+}
+
 @MainActor
 class PhotoLibraryManager: ObservableObject {
     @Published var authorizationStatus: PHAuthorizationStatus = .notDetermined
+    @Published var monthAlbums: [MonthAlbum] = []
     @Published var utilityAlbums: [PHAssetCollection] = []
     @Published var userAlbums: [PHAssetCollection] = []
     
     private let imageManager = PHCachingImageManager()
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter
+    }()
     
     init() {
         checkAuthorizationStatus()
@@ -36,6 +57,48 @@ class PhotoLibraryManager: ObservableObject {
     }
     
     func fetchAlbums() {
+        fetchMonthAlbums()
+        fetchUtilityAndUserAlbums()
+    }
+    
+    private func fetchMonthAlbums() {
+        let fetchOptions = PHFetchOptions()
+        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        
+        let results = PHAsset.fetchAssets(with: .image, options: fetchOptions)
+        
+        // Group photos by month
+        var groupedPhotos: [String: (date: Date, photos: [PHAsset])] = [:]
+        let calendar = Calendar.current
+        
+        results.enumerateObjects { asset, _, _ in
+            guard let creationDate = asset.creationDate else { return }
+            
+            let components = calendar.dateComponents([.year, .month], from: creationDate)
+            guard let year = components.year, let month = components.month else { return }
+            
+            let key = "\(year)-\(String(format: "%02d", month))"
+            
+            if groupedPhotos[key] == nil {
+                // Use first day of month for sorting
+                let monthDate = calendar.date(from: components) ?? creationDate
+                groupedPhotos[key] = (date: monthDate, photos: [])
+            }
+            groupedPhotos[key]?.photos.append(asset)
+        }
+        
+        // Convert to MonthAlbum array and sort by date (newest first)
+        self.monthAlbums = groupedPhotos.map { key, value in
+            MonthAlbum(
+                id: key,
+                title: dateFormatter.string(from: value.date),
+                date: value.date,
+                photos: value.photos
+            )
+        }.sorted { $0.date > $1.date }
+    }
+    
+    private func fetchUtilityAndUserAlbums() {
         var utilities: [PHAssetCollection] = []
         var user: [PHAssetCollection] = []
         

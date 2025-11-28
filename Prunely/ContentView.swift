@@ -68,9 +68,29 @@ struct AlbumsGridView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
+                // Months Section
+                if !photoLibrary.monthAlbums.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Months")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                        
+                        LazyVGrid(columns: columns, spacing: 20) {
+                            ForEach(photoLibrary.monthAlbums) { monthAlbum in
+                                NavigationLink(destination: MonthAlbumDetailView(monthAlbum: monthAlbum, photoLibrary: photoLibrary)) {
+                                    MonthAlbumThumbnail(monthAlbum: monthAlbum, photoLibrary: photoLibrary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                
                 // Utilities Section
                 if !photoLibrary.utilityAlbums.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
+                        Divider()
+                            .padding(.vertical, 24)
                         Text("Utilities")
                             .font(.largeTitle)
                             .fontWeight(.bold)
@@ -89,13 +109,11 @@ struct AlbumsGridView: View {
                 // User Albums Section
                 if !photoLibrary.userAlbums.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        // Add extra top padding and a dividing line before this section
                         Divider()
                             .padding(.vertical, 24)
                         Text("Albums")
                             .font(.largeTitle)
                             .fontWeight(.bold)
-                            .fontWeight(.semibold)
                         
                         LazyVGrid(columns: columns, spacing: 20) {
                             ForEach(photoLibrary.userAlbums, id: \.localIdentifier) { album in
@@ -111,6 +129,52 @@ struct AlbumsGridView: View {
             .padding(20)
         }
         .navigationTitle("Library")
+    }
+}
+
+struct MonthAlbumThumbnail: View {
+    let monthAlbum: MonthAlbum
+    @ObservedObject var photoLibrary: PhotoLibraryManager
+    @State private var coverImage: NSImage?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Cover image
+            Group {
+                if let image = coverImage {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                }
+            }
+            .frame(width: 160, height: 160)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            
+            // Month name
+            Text(monthAlbum.title)
+                .font(.headline)
+                .lineLimit(1)
+            
+            // Photo count
+            Text("\(monthAlbum.photoCount) photos")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .onAppear {
+            loadCoverImage()
+        }
+    }
+    
+    private func loadCoverImage() {
+        guard let coverAsset = monthAlbum.coverPhoto else { return }
+        photoLibrary.loadThumbnail(for: coverAsset, size: CGSize(width: 320, height: 320)) { image in
+            DispatchQueue.main.async {
+                self.coverImage = image
+            }
+        }
     }
 }
 

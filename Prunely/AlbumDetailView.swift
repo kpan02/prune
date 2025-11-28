@@ -32,6 +32,28 @@ struct AlbumDetailView: View {
     }
 }
 
+struct MonthAlbumDetailView: View {
+    let monthAlbum: MonthAlbum
+    @ObservedObject var photoLibrary: PhotoLibraryManager
+    
+    private let columns = [
+        GridItem(.adaptive(minimum: 120), spacing: 2)
+    ]
+    
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 2) {
+                ForEach(monthAlbum.photos, id: \.localIdentifier) { asset in
+                    PhotoThumbnail(asset: asset, photoLibrary: photoLibrary)
+                        .aspectRatio(1, contentMode: .fill)
+                }
+            }
+            .padding(2)
+        }
+        .navigationTitle(monthAlbum.title)
+    }
+}
+
 struct PhotoThumbnail: View {
     let asset: PHAsset
     @ObservedObject var photoLibrary: PhotoLibraryManager
@@ -63,4 +85,3 @@ struct PhotoThumbnail: View {
         }
     }
 }
-
