@@ -29,7 +29,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 // Persistent Top Bar with Tabs
                 TopBar(selectedTab: $selectedTab)
-                
+
                 // Main Content
                 Group {
                     switch photoLibrary.authorizationStatus {
