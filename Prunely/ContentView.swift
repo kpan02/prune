@@ -196,7 +196,6 @@ struct MonthsGridView: View {
     let columns: [GridItem]
     
     @State private var selectedMonthAlbum: MonthAlbum?
-    @State private var photosToReview: [PHAsset] = []
     
     private var albumsWithUnreviewedPhotos: [MonthAlbum] {
         photoLibrary.monthAlbums.filter { monthAlbum in
@@ -214,10 +213,6 @@ struct MonthsGridView: View {
                 ForEach(albumsWithUnreviewedPhotos) { monthAlbum in
                     MonthAlbumThumbnail(monthAlbum: monthAlbum, photoLibrary: photoLibrary, decisionStore: decisionStore)
                         .onTapGesture {
-                            // Snapshot photos once
-                            photosToReview = monthAlbum.photos.filter { asset in
-                                !decisionStore.isReviewed(asset.localIdentifier)
-                            }
                             selectedMonthAlbum = monthAlbum
                         }
                 }
@@ -229,6 +224,10 @@ struct MonthsGridView: View {
                 )
             ) {
                 if let monthAlbum = selectedMonthAlbum {
+                    // Filter photos at navigation time to avoid state timing issues
+                    let photosToReview = monthAlbum.photos.filter { asset in
+                        !decisionStore.isReviewed(asset.localIdentifier)
+                    }
                     PhotoReviewView(
                         albumTitle: monthAlbum.title,
                         photos: photosToReview,
@@ -247,8 +246,6 @@ struct UtilitiesGridView: View {
     let columns: [GridItem]
     
     @State private var selectedAlbum: PHAssetCollection?
-    @State private var photosToReview: [PHAsset] = []
-    @State private var albumTitle: String = ""
     
     private var albumsWithUnreviewedPhotos: [PHAssetCollection] {
         photoLibrary.utilityAlbums.filter { album in
@@ -267,19 +264,18 @@ struct UtilitiesGridView: View {
                 ForEach(albumsWithUnreviewedPhotos, id: \.localIdentifier) { album in
                     AlbumThumbnail(album: album, photoLibrary: photoLibrary, decisionStore: decisionStore)
                         .onTapGesture {
-                            // Snapshot photos once
-                            let allPhotos = photoLibrary.fetchPhotos(in: album)
-                            photosToReview = allPhotos.filter { asset in
-                                !decisionStore.isReviewed(asset.localIdentifier)
-                            }
-                            albumTitle = album.localizedTitle ?? "Album"
                             selectedAlbum = album
                         }
                 }
             }
-            .navigationDestination(item: $selectedAlbum) { _ in
+            .navigationDestination(item: $selectedAlbum) { album in
+                // Filter photos at navigation time to avoid state timing issues
+                let allPhotos = photoLibrary.fetchPhotos(in: album)
+                let photosToReview = allPhotos.filter { asset in
+                    !decisionStore.isReviewed(asset.localIdentifier)
+                }
                 PhotoReviewView(
-                    albumTitle: albumTitle,
+                    albumTitle: album.localizedTitle ?? "Album",
                     photos: photosToReview,
                     photoLibrary: photoLibrary,
                     decisionStore: decisionStore
@@ -295,8 +291,6 @@ struct AlbumsGridView: View {
     let columns: [GridItem]
     
     @State private var selectedAlbum: PHAssetCollection?
-    @State private var photosToReview: [PHAsset] = []
-    @State private var albumTitle: String = ""
     
     private var albumsWithUnreviewedPhotos: [PHAssetCollection] {
         photoLibrary.userAlbums.filter { album in
@@ -315,19 +309,18 @@ struct AlbumsGridView: View {
                 ForEach(albumsWithUnreviewedPhotos, id: \.localIdentifier) { album in
                     AlbumThumbnail(album: album, photoLibrary: photoLibrary, decisionStore: decisionStore)
                         .onTapGesture {
-                            // Snapshot photos once
-                            let allPhotos = photoLibrary.fetchPhotos(in: album)
-                            photosToReview = allPhotos.filter { asset in
-                                !decisionStore.isReviewed(asset.localIdentifier)
-                            }
-                            albumTitle = album.localizedTitle ?? "Album"
                             selectedAlbum = album
                         }
                 }
             }
-            .navigationDestination(item: $selectedAlbum) { _ in
+            .navigationDestination(item: $selectedAlbum) { album in
+                // Filter photos at navigation time to avoid state timing issues
+                let allPhotos = photoLibrary.fetchPhotos(in: album)
+                let photosToReview = allPhotos.filter { asset in
+                    !decisionStore.isReviewed(asset.localIdentifier)
+                }
                 PhotoReviewView(
-                    albumTitle: albumTitle,
+                    albumTitle: album.localizedTitle ?? "Album",
                     photos: photosToReview,
                     photoLibrary: photoLibrary,
                     decisionStore: decisionStore

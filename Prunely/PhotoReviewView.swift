@@ -11,9 +11,11 @@ import AppKit
 
 struct PhotoReviewView: View {
     let albumTitle: String
-    let photos: [PHAsset]
     @ObservedObject var photoLibrary: PhotoLibraryManager
     @ObservedObject var decisionStore: PhotoDecisionStore
+    
+    // Freeze the photos array on init - won't react to decisionStore changes
+    @State private var photos: [PHAsset]
     
     @Environment(\.dismiss) private var dismiss
     @State private var currentIndex: Int = 0
@@ -22,6 +24,13 @@ struct PhotoReviewView: View {
     @State private var imageLoadFailed = false
     @State private var isLoading = false
     @State private var metadata: PhotoMetadata?
+    
+    init(albumTitle: String, photos: [PHAsset], photoLibrary: PhotoLibraryManager, decisionStore: PhotoDecisionStore) {
+        self.albumTitle = albumTitle
+        self._photos = State(initialValue: photos)
+        self.photoLibrary = photoLibrary
+        self.decisionStore = decisionStore
+    }
     
     private var currentAsset: PHAsset? {
         guard photos.indices.contains(currentIndex) else { return nil }
