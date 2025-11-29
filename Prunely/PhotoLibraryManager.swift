@@ -31,6 +31,7 @@ class PhotoLibraryManager: ObservableObject {
     @Published var userAlbums: [PHAssetCollection] = []
     
     private let imageManager = PHCachingImageManager()
+    private var albumPhotosCache: [String: [PHAsset]] = [:]
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMMM yyyy"
@@ -57,6 +58,7 @@ class PhotoLibraryManager: ObservableObject {
     }
     
     func fetchAlbums() {
+        albumPhotosCache.removeAll()
         fetchMonthAlbums()
         fetchUtilityAndUserAlbums()
     }
@@ -143,6 +145,11 @@ class PhotoLibraryManager: ObservableObject {
     }
     
     func fetchPhotos(in album: PHAssetCollection) -> [PHAsset] {
+        // Return cached photos if available
+        if let cached = albumPhotosCache[album.localIdentifier] {
+            return cached
+        }
+        
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         fetchOptions.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
@@ -153,6 +160,9 @@ class PhotoLibraryManager: ObservableObject {
         results.enumerateObjects { asset, _, _ in
             assets.append(asset)
         }
+        
+        // Cache results for subsequent calls
+        albumPhotosCache[album.localIdentifier] = assets
         
         return assets
     }
