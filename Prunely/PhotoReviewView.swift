@@ -2,7 +2,7 @@
 //  PhotoReviewView.swift
 //  Prunely
 //
-//  Tinder-style photo review interface for accepting, deleting, or skipping photos.
+//  Photo review interface with filmstrip navigation and flexible reviewing.
 //
 
 import SwiftUI
@@ -14,11 +14,12 @@ struct PhotoReviewView: View {
     @ObservedObject var photoLibrary: PhotoLibraryManager
     @ObservedObject var decisionStore: PhotoDecisionStore
     
-    // Freeze the photos array on init - won't react to decisionStore changes
-    @State private var photos: [PHAsset]
+    // All photos in the album (not pre-filtered)
+    private let allPhotos: [PHAsset]
     
     @Environment(\.dismiss) private var dismiss
-    @State private var currentIndex: Int = 0
+    // Track current photo by ID instead of index for stability
+    @State private var currentPhotoId: String?
     @State private var currentImage: NSImage?
     @State private var isCompleted = false
     @State private var imageLoadFailed = false
@@ -26,224 +27,491 @@ struct PhotoReviewView: View {
     @State private var metadata: PhotoMetadata?
     @State private var isBackHovered = false
     @State private var feedback: ReviewFeedback?
+    @State private var hideReviewed = false  // Default: show all photos
+    @State private var thumbnailCache: [String: NSImage] = [:]
     
     init(albumTitle: String, photos: [PHAsset], photoLibrary: PhotoLibraryManager, decisionStore: PhotoDecisionStore) {
         self.albumTitle = albumTitle
-        self._photos = State(initialValue: photos)
+        self.allPhotos = photos
         self.photoLibrary = photoLibrary
         self.decisionStore = decisionStore
     }
     
+    // Photos to display based on toggle
+    private var displayedPhotos: [PHAsset] {
+        if hideReviewed {
+            return allPhotos.filter { !decisionStore.isReviewed($0.localIdentifier) }
+        } else {
+            return allPhotos
+        }
+    }
+    
+    // Current index derived from photo ID
+    private var currentIndex: Int {
+        guard let photoId = currentPhotoId else { return 0 }
+        return displayedPhotos.firstIndex(where: { $0.localIdentifier == photoId }) ?? 0
+    }
+    
     private var currentAsset: PHAsset? {
-        guard photos.indices.contains(currentIndex) else { return nil }
-        return photos[currentIndex]
+        guard let photoId = currentPhotoId else { return displayedPhotos.first }
+        return displayedPhotos.first(where: { $0.localIdentifier == photoId })
     }
     
     private var progressText: String {
-        "\(currentIndex + 1) / \(photos.count)"
+        let total = displayedPhotos.count
+        let position = total > 0 ? currentIndex + 1 : 0
+        if hideReviewed {
+            return "\(position) / \(total) Unreviewed"
+        } else {
+            return "\(position) / \(total)"
+        }
+    }
+    
+    // Current photo's decision status
+    private var currentDecisionStatus: DecisionStatus? {
+        guard let asset = currentAsset else { return nil }
+        if decisionStore.isArchived(asset.localIdentifier) {
+            return .kept
+        } else if decisionStore.isTrashed(asset.localIdentifier) {
+            return .deleted
+        }
+        return nil
     }
     
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 // Top bar
-                HStack {
-                    Button {
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                            Text("Back")
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(isBackHovered ? Color.primary.opacity(0.06) : .clear)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        withAnimation(.easeInOut(duration: 0.12)) {
-                            isBackHovered = hovering
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Text(albumTitle)
-                        .font(.headline)
-                    
-                    Spacer()
-                    
-                    Text(progressText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding()
-                .background(.ultraThinMaterial)
+                topBar
                 
-                // Metadata bar (moved above photo area)
+                // Metadata bar
                 if let metadata = metadata, !isCompleted {
-                    HStack(spacing: 20) {
-                        Spacer()
-                        // Date
-                        HStack(spacing: 10) {
-                            Image(systemName: "calendar")
-                                .font(.caption)
-                            Text(metadata.formattedDate)
-                                .font(.caption)
-                        }
-                        
-                        // File size
-                        if let size = metadata.formattedSize {
-                            HStack(spacing: 10) {
-                                Image(systemName: "doc.fill")
-                                    .font(.caption)
-                                Text(size)
-                                    .font(.caption)
-                            }
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .background(Color.white)
-                    .foregroundStyle(.secondary)
+                    metadataBar(metadata: metadata)
                 }
                 
                 // Photo area
-                if isCompleted {
-                    CompletionView(photoCount: photos.count) {
+                if isCompleted || displayedPhotos.isEmpty {
+                    CompletionView(photoCount: allPhotos.count, reviewedCount: allPhotos.count - displayedPhotos.count) {
                         dismiss()
                     }
                 } else {
-                    GeometryReader { proxy in
-                        ZStack {
-                            Color.white
-                            
-                            if imageLoadFailed {
-                                VStack(spacing: 12) {
-                                    Image(systemName: "exclamationmark.triangle")
-                                        .font(.system(size: 48))
-                                        .foregroundStyle(.yellow)
-                                    Text("Unable to load this photo")
-                                        .font(.headline)
-                                        .foregroundStyle(.white)
-                                    Text("This photo may be corrupted or unavailable")
-                                        .font(.caption)
-                                        .foregroundStyle(.white.opacity(0.7))
-                                    Button("Skip This Photo") {
-                                        handleSkip()
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                }
-                            } else if let image = currentImage {
-                                Image(nsImage: image)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(maxWidth: proxy.size.width, maxHeight: proxy.size.height)
-                            } else if isLoading {
-                                ProgressView()
-                                    .tint(.white)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
+                    photoArea
+                    
+                    // Filmstrip
+                    filmstrip
                     
                     // Controls
-                    HStack(spacing: 24) {
-                        Button {
-                            handleDelete()
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                                .frame(minWidth: 100)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color.red)
-                        .controlSize(.large)
-                        .keyboardShortcut(.leftArrow, modifiers: [])
-                        
-                        Button {
-                            handleSkip()
-                        } label: {
-                            Text("Skip")
-                                .frame(minWidth: 100)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                        .keyboardShortcut(.downArrow, modifiers: [])
-                        
-                        Button {
-                            handleAccept()
-                        } label: {
-                            Label("Keep", systemImage: "checkmark.circle")
-                                .frame(minWidth: 100)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
-                        .controlSize(.large)
-                        .keyboardShortcut(.rightArrow, modifiers: [])
-                    }
-                    .padding()
-                    .background(Color.white)
+                    controlsBar
                 }
             }
             
+            // Feedback toast
             if let feedback = feedback {
-                VStack {
-                    let config = feedbackConfig(for: feedback)
-                    
-                    HStack(spacing: 6) {
-                        Image(systemName: config.icon)
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(config.text)
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(config.background)
-                    )
-                    .foregroundStyle(Color.white)
-                    .shadow(color: config.shadow, radius: 8, x: 0, y: 4)
-                    
-                    Spacer()
-                }
-                .padding(.top, 60)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                feedbackToast(feedback: feedback)
             }
         }
         .frame(minWidth: 800, minHeight: 600)
         .onAppear {
+            initializeCurrentPhoto()
             loadCurrentImage()
             loadMetadata()
         }
-        .onChange(of: currentIndex) { 
+        .onChange(of: currentPhotoId) { 
             loadCurrentImage()
             loadMetadata()
         }
+        .onChange(of: hideReviewed) { oldValue, newValue in
+            handleToggleChange(wasHiding: oldValue, nowHiding: newValue)
+        }
+    }
+    
+    // MARK: - Initialization
+    
+    private func initializeCurrentPhoto() {
+        // Start at first unreviewed photo
+        if let firstUnreviewed = allPhotos.first(where: { !decisionStore.isReviewed($0.localIdentifier) }) {
+            currentPhotoId = firstUnreviewed.localIdentifier
+        } else if let first = allPhotos.first {
+            currentPhotoId = first.localIdentifier
+        }
+    }
+    
+    // MARK: - View Components
+    
+    private var topBar: some View {
+        HStack {
+            Button {
+                dismiss()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.left")
+                    Text("Back")
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isBackHovered ? Color.primary.opacity(0.06) : .clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.12)) {
+                    isBackHovered = hovering
+                }
+            }
+            
+            Spacer()
+            
+            Text(albumTitle)
+                .font(.headline)
+            
+            Spacer()
+            
+            // Hide reviewed toggle
+            Toggle(isOn: $hideReviewed) {
+                Text("Hide reviewed")
+                    .font(.subheadline)
+            }
+            .toggleStyle(.checkbox)
+            .help("Show only unreviewed photos")
+            
+            Text(progressText)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 140, alignment: .trailing)
+        }
+        .padding()
+        .background(.ultraThinMaterial)
+    }
+    
+    private func metadataBar(metadata: PhotoMetadata) -> some View {
+        HStack(spacing: 20) {
+            Spacer()
+            
+            // Decision status badge
+            if let status = currentDecisionStatus {
+                HStack(spacing: 6) {
+                    Image(systemName: status == .kept ? "checkmark.circle.fill" : "trash.fill")
+                        .font(.caption)
+                    Text(status == .kept ? "Marked as Keep" : "Marked as Delete")
+                        .font(.caption.weight(.medium))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(status == .kept ? Color.green.opacity(0.15) : Color.red.opacity(0.15))
+                )
+                .foregroundStyle(status == .kept ? .green : .red)
+            }
+            
+            // Date
+            HStack(spacing: 10) {
+                Image(systemName: "calendar")
+                    .font(.caption)
+                Text(metadata.formattedDate)
+                    .font(.caption)
+            }
+            
+            // File size
+            if let size = metadata.formattedSize {
+                HStack(spacing: 10) {
+                    Image(systemName: "doc.fill")
+                        .font(.caption)
+                    Text(size)
+                        .font(.caption)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color.white)
+        .foregroundStyle(.secondary)
+    }
+    
+    private var photoArea: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Color.white
+                
+                if imageLoadFailed {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.yellow)
+                        Text("Unable to load this photo")
+                            .font(.headline)
+                            .foregroundStyle(.gray)
+                        Text("This photo may be corrupted or unavailable")
+                            .font(.caption)
+                            .foregroundStyle(.gray.opacity(0.7))
+                        Button("Skip This Photo") {
+                            goToNext()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                } else if let image = currentImage {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: proxy.size.width, maxHeight: proxy.size.height)
+                } else if isLoading {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+    
+    private var filmstrip: some View {
+        ScrollViewReader { scrollProxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 4) {
+                    ForEach(displayedPhotos, id: \.localIdentifier) { asset in
+                        FilmstripThumbnail(
+                            asset: asset,
+                            isSelected: asset.localIdentifier == currentPhotoId,
+                            decisionStatus: getDecisionStatus(for: asset),
+                            thumbnail: thumbnailCache[asset.localIdentifier]
+                        )
+                        .id(asset.localIdentifier)
+                        .onAppear {
+                            loadThumbnail(for: asset)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .frame(height: 80)
+            .background(Color(nsColor: .windowBackgroundColor))
+            .onChange(of: currentPhotoId) { _, newId in
+                if let newId = newId {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        scrollProxy.scrollTo(newId, anchor: .center)
+                    }
+                }
+            }
+            .onAppear {
+                // Initial scroll to current position
+                if let photoId = currentPhotoId {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        scrollProxy.scrollTo(photoId, anchor: .center)
+                    }
+                }
+            }
+        }
+    }
+    
+    private var controlsBar: some View {
+        HStack(spacing: 20) {
+            // Navigation: Left = Previous
+            Button {
+                goToPrevious()
+            } label: {
+                Label("Back", systemImage: "chevron.left")
+                    .frame(minWidth: 80)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .keyboardShortcut(.leftArrow, modifiers: [])
+            
+            Spacer()
+            
+            // Decisions in the middle
+            VStack(spacing: 8) {
+                Button {
+                    handleAccept()
+                } label: {
+                    Label("Keep", systemImage: "checkmark.circle")
+                        .frame(minWidth: 120)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+                .controlSize(.large)
+                .keyboardShortcut(.upArrow, modifiers: [])
+                
+                Button {
+                    handleDelete()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                        .frame(minWidth: 120)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.red)
+                .controlSize(.large)
+                .keyboardShortcut(.downArrow, modifiers: [])
+            }
+            
+            Spacer()
+            
+            // Navigation: Right = Next
+            Button {
+                goToNext()
+            } label: {
+                Label("Next", systemImage: "chevron.right")
+                    .frame(minWidth: 80)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .keyboardShortcut(.rightArrow, modifiers: [])
+        }
+        .padding()
+        .background(Color.white)
+        // Hidden button for spacebar to clear decision
+        .background(
+            Button("") { handleClearDecision() }
+                .keyboardShortcut(.space, modifiers: [])
+                .opacity(0)
+        )
+    }
+    
+    private func feedbackToast(feedback: ReviewFeedback) -> some View {
+        VStack {
+            let config = feedbackConfig(for: feedback)
+            
+            HStack(spacing: 6) {
+                Image(systemName: config.icon)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(config.text)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(config.background)
+            )
+            .foregroundStyle(Color.white)
+            .shadow(color: config.shadow, radius: 8, x: 0, y: 4)
+            
+            Spacer()
+        }
+        .padding(.top, 60)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
     
     // MARK: - Actions
     
     private func handleAccept() {
         guard let asset = currentAsset else { return }
-        decisionStore.archive(asset.localIdentifier)
+        let photoId = asset.localIdentifier
+        decisionStore.archive(photoId)
         showFeedback(.kept)
-        advance()
+        advanceAfterDecision(from: photoId)
     }
     
     private func handleDelete() {
         guard let asset = currentAsset else { return }
-        decisionStore.trash(asset.localIdentifier)
+        let photoId = asset.localIdentifier
+        decisionStore.trash(photoId)
         showFeedback(.deleted)
-        advance()
+        advanceAfterDecision(from: photoId)
     }
     
-    private func handleSkip() {
-        advance()
+    private func handleClearDecision() {
+        guard let asset = currentAsset else { return }
+        // Only clear if photo is currently reviewed
+        guard decisionStore.isReviewed(asset.localIdentifier) else { return }
+        decisionStore.restore(asset.localIdentifier)
+        showFeedback(.cleared)
+    }
+    
+    private func goToNext() {
+        let idx = currentIndex
+        if idx < displayedPhotos.count - 1 {
+            currentPhotoId = displayedPhotos[idx + 1].localIdentifier
+        } else {
+            isCompleted = true
+        }
+    }
+    
+    private func goToPrevious() {
+        let idx = currentIndex
+        if idx > 0 {
+            currentPhotoId = displayedPhotos[idx - 1].localIdentifier
+        }
+    }
+    
+    private func advanceAfterDecision(from photoId: String) {
+        if hideReviewed {
+            // When hiding reviewed, the current photo disappears from displayedPhotos
+            // We need to find the next unreviewed photo
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                // Find what would be the next photo after the one we just reviewed
+                // Look in allPhotos to find position, then find next unreviewed
+                if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
+                    // Look for next unreviewed photo after this position
+                    for i in (originalIndex + 1)..<allPhotos.count {
+                        if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
+                            currentPhotoId = allPhotos[i].localIdentifier
+                            return
+                        }
+                    }
+                    // No more after, try from beginning
+                    for i in 0..<originalIndex {
+                        if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
+                            currentPhotoId = allPhotos[i].localIdentifier
+                            return
+                        }
+                    }
+                    // All reviewed
+                    isCompleted = true
+                } else {
+                    isCompleted = true
+                }
+            }
+        } else {
+            // When showing all, just advance to next
+            goToNext()
+        }
+    }
+    
+    private func handleToggleChange(wasHiding: Bool, nowHiding: Bool) {
+        guard let photoId = currentPhotoId else {
+            // No current photo, initialize
+            if let first = displayedPhotos.first {
+                currentPhotoId = first.localIdentifier
+            }
+            return
+        }
+        
+        // Check if current photo is still in the new displayed list
+        if displayedPhotos.contains(where: { $0.localIdentifier == photoId }) {
+            // Photo still visible, no change needed - just trigger a scroll update
+            // The filmstrip will update automatically
+            return
+        }
+        
+        // Photo is no longer visible (it was reviewed and we're now hiding reviewed)
+        // Find the nearest photo in the new list
+        if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
+            // Try to find closest unreviewed photo
+            // First look forward
+            for i in originalIndex..<allPhotos.count {
+                if displayedPhotos.contains(where: { $0.localIdentifier == allPhotos[i].localIdentifier }) {
+                    currentPhotoId = allPhotos[i].localIdentifier
+                    return
+                }
+            }
+            // Then look backward
+            for i in stride(from: originalIndex - 1, through: 0, by: -1) {
+                if displayedPhotos.contains(where: { $0.localIdentifier == allPhotos[i].localIdentifier }) {
+                    currentPhotoId = allPhotos[i].localIdentifier
+                    return
+                }
+            }
+        }
+        
+        // Fallback to first in list
+        if let first = displayedPhotos.first {
+            currentPhotoId = first.localIdentifier
+        } else {
+            isCompleted = true
+        }
     }
 
     private func showFeedback(_ type: ReviewFeedback) {
@@ -260,13 +528,7 @@ struct PhotoReviewView: View {
         }
     }
     
-    private func advance() {
-        if currentIndex < photos.count - 1 {
-            currentIndex += 1
-        } else {
-            isCompleted = true
-        }
-    }
+    // MARK: - Image Loading
     
     private func loadCurrentImage() {
         guard let asset = currentAsset else { return }
@@ -274,11 +536,14 @@ struct PhotoReviewView: View {
         imageLoadFailed = false
         isLoading = true
         
+        let assetId = asset.localIdentifier
+        
         // Add timeout to prevent indefinite loading
         let timeoutTask = DispatchWorkItem {
             DispatchQueue.main.async {
-                if self.currentImage == nil && !self.imageLoadFailed {
-                    print("Image load timeout for asset: \(asset.localIdentifier)")
+                // Only apply timeout if still on same photo
+                if self.currentPhotoId == assetId && self.currentImage == nil && !self.imageLoadFailed {
+                    print("Image load timeout for asset: \(assetId)")
                     self.imageLoadFailed = true
                     self.isLoading = false
                 }
@@ -288,15 +553,30 @@ struct PhotoReviewView: View {
         
         photoLibrary.loadHighQualityImage(for: asset) { image in
             DispatchQueue.main.async {
-                timeoutTask.cancel() // Cancel timeout if we got a response
+                timeoutTask.cancel()
+                // Only update if still on same photo
+                guard self.currentPhotoId == assetId else { return }
+                
                 self.isLoading = false
                 
                 if let image = image {
                     self.currentImage = image
                     self.imageLoadFailed = false
                 } else {
-                    print("Failed to load image for asset: \(asset.localIdentifier)")
+                    print("Failed to load image for asset: \(assetId)")
                     self.imageLoadFailed = true
+                }
+            }
+        }
+    }
+    
+    private func loadThumbnail(for asset: PHAsset) {
+        guard thumbnailCache[asset.localIdentifier] == nil else { return }
+        
+        photoLibrary.loadThumbnail(for: asset, size: CGSize(width: 120, height: 120)) { image in
+            DispatchQueue.main.async {
+                if let image = image {
+                    self.thumbnailCache[asset.localIdentifier] = image
                 }
             }
         }
@@ -328,6 +608,22 @@ struct PhotoReviewView: View {
         formatter.countStyle = .file
         return formatter.string(fromByteCount: bytes)
     }
+    
+    private func getDecisionStatus(for asset: PHAsset) -> DecisionStatus? {
+        if decisionStore.isArchived(asset.localIdentifier) {
+            return .kept
+        } else if decisionStore.isTrashed(asset.localIdentifier) {
+            return .deleted
+        }
+        return nil
+    }
+}
+
+// MARK: - Supporting Types
+
+enum DecisionStatus {
+    case kept
+    case deleted
 }
 
 struct PhotoMetadata {
@@ -338,6 +634,7 @@ struct PhotoMetadata {
 enum ReviewFeedback {
     case kept
     case deleted
+    case cleared
 }
 
 private struct ReviewFeedbackConfig {
@@ -356,6 +653,13 @@ private func feedbackConfig(for feedback: ReviewFeedback) -> ReviewFeedbackConfi
             background: Color.green.opacity(0.9),
             shadow: Color.green.opacity(0.35)
         )
+    case .cleared:
+        return ReviewFeedbackConfig(
+            text: "Cleared",
+            icon: "arrow.uturn.backward.circle.fill",
+            background: Color.gray.opacity(0.9),
+            shadow: Color.gray.opacity(0.35)
+        )
     case .deleted:
         return ReviewFeedbackConfig(
             text: "Deleted",
@@ -366,8 +670,72 @@ private func feedbackConfig(for feedback: ReviewFeedback) -> ReviewFeedbackConfi
     }
 }
 
+// MARK: - Filmstrip Thumbnail
+
+struct FilmstripThumbnail: View {
+    let asset: PHAsset
+    let isSelected: Bool
+    let decisionStatus: DecisionStatus?
+    let thumbnail: NSImage?
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            // Thumbnail image
+            Group {
+                if let thumbnail = thumbnail {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.2))
+                        .overlay(
+                            ProgressView()
+                                .scaleEffect(0.5)
+                        )
+                }
+            }
+            .frame(width: 56, height: 56)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(borderColor, lineWidth: isSelected ? 3 : 1)
+            )
+            .scaleEffect(isSelected ? 1.1 : 1.0)
+            .animation(.easeInOut(duration: 0.15), value: isSelected)
+            
+            // Decision indicator
+            if let status = decisionStatus {
+                Circle()
+                    .fill(status == .kept ? Color.green : Color.red)
+                    .frame(width: 14, height: 14)
+                    .overlay(
+                        Image(systemName: status == .kept ? "checkmark" : "trash.fill")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundStyle(.white)
+                    )
+                    .offset(x: 4, y: -4)
+            }
+        }
+    }
+    
+    private var borderColor: Color {
+        if isSelected {
+            return .accentColor
+        } else if decisionStatus == .kept {
+            return .green.opacity(0.5)
+        } else if decisionStatus == .deleted {
+            return .red.opacity(0.5)
+        }
+        return .gray.opacity(0.3)
+    }
+}
+
+// MARK: - Completion View
+
 struct CompletionView: View {
     let photoCount: Int
+    let reviewedCount: Int
     let onDismiss: () -> Void
     
     var body: some View {
@@ -393,4 +761,3 @@ struct CompletionView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
-

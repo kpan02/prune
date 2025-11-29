@@ -224,13 +224,10 @@ struct MonthsGridView: View {
                 )
             ) {
                 if let monthAlbum = selectedMonthAlbum {
-                    // Filter photos at navigation time to avoid state timing issues
-                    let photosToReview = monthAlbum.photos.filter { asset in
-                        !decisionStore.isReviewed(asset.localIdentifier)
-                    }
+                    // Pass all photos - filtering handled by PhotoReviewView toggle
                     PhotoReviewView(
                         albumTitle: monthAlbum.title,
-                        photos: photosToReview,
+                        photos: monthAlbum.photos,
                         photoLibrary: photoLibrary,
                         decisionStore: decisionStore
                     )
@@ -269,14 +266,11 @@ struct MediaGridView: View {
                 }
             }
             .navigationDestination(item: $selectedAlbum) { album in
-                // Filter photos at navigation time to avoid state timing issues
+                // Pass all photos - filtering handled by PhotoReviewView toggle
                 let allPhotos = photoLibrary.fetchPhotos(in: album)
-                let photosToReview = allPhotos.filter { asset in
-                    !decisionStore.isReviewed(asset.localIdentifier)
-                }
                 PhotoReviewView(
                     albumTitle: album.localizedTitle ?? "Album",
-                    photos: photosToReview,
+                    photos: allPhotos,
                     photoLibrary: photoLibrary,
                     decisionStore: decisionStore
                 )
@@ -314,14 +308,11 @@ struct AlbumsGridView: View {
                 }
             }
             .navigationDestination(item: $selectedAlbum) { album in
-                // Filter photos at navigation time to avoid state timing issues
+                // Pass all photos - filtering handled by PhotoReviewView toggle
                 let allPhotos = photoLibrary.fetchPhotos(in: album)
-                let photosToReview = allPhotos.filter { asset in
-                    !decisionStore.isReviewed(asset.localIdentifier)
-                }
                 PhotoReviewView(
                     albumTitle: album.localizedTitle ?? "Album",
-                    photos: photosToReview,
+                    photos: allPhotos,
                     photoLibrary: photoLibrary,
                     decisionStore: decisionStore
                 )
