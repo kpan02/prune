@@ -71,6 +71,7 @@ struct AlbumsGridView: View {
     let columns: [GridItem]
     
     @State private var selectedAlbum: PHAssetCollection?
+    @State private var hideReviewedAlbums: Bool = true
     
     private var albumsWithUnreviewedPhotos: [PHAssetCollection] {
         photoLibrary.userAlbums.filter { album in
@@ -81,8 +82,22 @@ struct AlbumsGridView: View {
         }
     }
     
+    private var albumsToShow: [PHAssetCollection] {
+        if hideReviewedAlbums {
+            return albumsWithUnreviewedPhotos
+        } else {
+            return photoLibrary.userAlbums.filter { album in
+                let allPhotos = photoLibrary.fetchPhotos(in: album)
+                // Include if has unreviewed OR all are archived
+                let hasUnreviewed = allPhotos.contains { !decisionStore.isReviewed($0.localIdentifier) }
+                let allArchived = !allPhotos.isEmpty && allPhotos.allSatisfy { decisionStore.isArchived($0.localIdentifier) }
+                return hasUnreviewed || allArchived
+            }
+        }
+    }
+    
     var body: some View {
-        if albumsWithUnreviewedPhotos.isEmpty {
+        if albumsToShow.isEmpty {
             EmptyStateView(title: "All Done!", message: "You've reviewed all your albums")
         } else {
             VStack(alignment: .leading, spacing: 16) {
@@ -92,17 +107,21 @@ struct AlbumsGridView: View {
                         Text("Albums")
                             .font(.system(size: 28, weight: .semibold))
                         
-                        Text("\(albumsWithUnreviewedPhotos.count) albums")
+                        Text("\(albumsToShow.count) albums")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     
                     Spacer()
+                    
+                    Toggle("Hide Reviewed Albums", isOn: $hideReviewedAlbums)
+                        .toggleStyle(.checkbox)
+                        .font(.system(size: 13))
                 }
                 .padding(.bottom, 8)
 
                 LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(albumsWithUnreviewedPhotos, id: \.localIdentifier) { album in
+                    ForEach(albumsToShow, id: \.localIdentifier) { album in
                         AlbumThumbnail(album: album, photoLibrary: photoLibrary, decisionStore: decisionStore)
                             .onTapGesture {
                                 selectedAlbum = album
@@ -130,6 +149,7 @@ struct MonthsGridView: View {
     let columns: [GridItem]
     
     @State private var selectedMonthAlbum: MonthAlbum?
+    @State private var hideReviewedAlbums: Bool = true
     
     private var albumsWithUnreviewedPhotos: [MonthAlbum] {
         photoLibrary.monthAlbums.filter { monthAlbum in
@@ -139,8 +159,21 @@ struct MonthsGridView: View {
         }
     }
     
+    private var albumsToShow: [MonthAlbum] {
+        if hideReviewedAlbums {
+            return albumsWithUnreviewedPhotos
+        } else {
+            return photoLibrary.monthAlbums.filter { monthAlbum in
+                // Include if has unreviewed OR all are archived
+                let hasUnreviewed = monthAlbum.photos.contains { !decisionStore.isReviewed($0.localIdentifier) }
+                let allArchived = !monthAlbum.photos.isEmpty && monthAlbum.photos.allSatisfy { decisionStore.isArchived($0.localIdentifier) }
+                return hasUnreviewed || allArchived
+            }
+        }
+    }
+    
     var body: some View {
-        if albumsWithUnreviewedPhotos.isEmpty {
+        if albumsToShow.isEmpty {
             EmptyStateView(title: "All Done!", message: "You've reviewed all photos in your library")
         } else {
             VStack(alignment: .leading, spacing: 16) {
@@ -150,18 +183,23 @@ struct MonthsGridView: View {
                         Text("Months")
                             .font(.system(size: 28, weight: .semibold))
                         
-                        Text("\(albumsWithUnreviewedPhotos.count) albums")
+                        Text("\(albumsToShow.count) albums")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     
                     Spacer()
+                    
+                    Toggle("Hide Reviewed Albums", isOn: $hideReviewedAlbums)
+                        .toggleStyle(.checkbox)
+                        .font(.system(size: 13))
                 }
                 .padding(.bottom, 8)
 
                 LazyVGrid(columns: columns, spacing: 20) {
-                    ForEach(albumsWithUnreviewedPhotos) { monthAlbum in
+                    ForEach(albumsToShow) { monthAlbum in
                         MonthAlbumThumbnail(monthAlbum: monthAlbum, photoLibrary: photoLibrary, decisionStore: decisionStore)
+                            .contentShape(Rectangle())
                             .onTapGesture {
                                 selectedMonthAlbum = monthAlbum
                             }
@@ -201,21 +239,58 @@ struct MonthAlbumThumbnail: View {
         }.count
     }
     
+    private var isFullyReviewed: Bool {
+        !monthAlbum.photos.isEmpty && monthAlbum.photos.allSatisfy { decisionStore.isArchived($0.localIdentifier) }
+    }
+    
+    private func unarchiveAlbum() {
+        let archivedPhotos = monthAlbum.photos.filter { decisionStore.isArchived($0.localIdentifier) }
+        for photo in archivedPhotos {
+            decisionStore.restore(photo.localIdentifier)
+        }
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Cover image
-            Group {
-                if let image = coverImage {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
+            ZStack {
+                Group {
+                    if let image = coverImage {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                    }
+                }
+                .frame(width: 160, height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .opacity(isFullyReviewed ? 0.4 : 1.0)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.gray.opacity(isFullyReviewed ? 0.6 : 0))
+                )
+                
+                // Unarchive button on hover for reviewed albums
+                if isHovered && isFullyReviewed {
+                    Button {
+                        unarchiveAlbum()
+                    } label: {
+                        Label("Unarchive Album", systemImage: "arrow.uturn.backward")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.white)
+                                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            )
+                            .foregroundStyle(.primary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .frame(width: 160, height: 160)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
             
             // Month name
             Text(monthAlbum.title)
@@ -261,28 +336,68 @@ struct AlbumThumbnail: View {
     @State private var coverImage: NSImage?
     @State private var isHovered = false
     
+    private var allPhotos: [PHAsset] {
+        photoLibrary.fetchPhotos(in: album)
+    }
+    
     private var unreviewedCount: Int {
-        let allPhotos = photoLibrary.fetchPhotos(in: album)
-        return allPhotos.filter { asset in
+        allPhotos.filter { asset in
             !decisionStore.isReviewed(asset.localIdentifier)
         }.count
+    }
+    
+    private var isFullyReviewed: Bool {
+        !allPhotos.isEmpty && allPhotos.allSatisfy { decisionStore.isArchived($0.localIdentifier) }
+    }
+    
+    private func unarchiveAlbum() {
+        let archivedPhotos = allPhotos.filter { decisionStore.isArchived($0.localIdentifier) }
+        for photo in archivedPhotos {
+            decisionStore.restore(photo.localIdentifier)
+        }
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Cover image
-            Group {
-                if let image = coverImage {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
+            ZStack {
+                Group {
+                    if let image = coverImage {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                    }
+                }
+                .frame(width: 160, height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .opacity(isFullyReviewed ? 0.4 : 1.0)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.gray.opacity(isFullyReviewed ? 0.6 : 0))
+                )
+                
+                // Unarchive button on hover for reviewed albums
+                if isHovered && isFullyReviewed {
+                    Button {
+                        unarchiveAlbum()
+                    } label: {
+                        Label("Unarchive Album", systemImage: "arrow.uturn.backward")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.white)
+                                    .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                            )
+                            .foregroundStyle(.primary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .frame(width: 160, height: 160)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
             
             // Album name
             Text(album.localizedTitle ?? "Untitled")
