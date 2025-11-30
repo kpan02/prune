@@ -97,9 +97,9 @@ struct TabContentView: View {
                 case .trash:
                     TrashGridView(photoLibrary: photoLibrary, decisionStore: decisionStore, columns: columns)
                 case .dashboard:
-                    UtilityPlaceholderView(title: "Dashboard", icon: "chart.bar.fill", description: "View your photo library statistics")
+                    DashboardView(photoLibrary: photoLibrary, decisionStore: decisionStore)
                 case .archive:
-                    UtilityPlaceholderView(title: "Archive", icon: "archivebox.fill", description: "Photos marked as kept will appear here")
+                    ArchiveGridView(photoLibrary: photoLibrary, decisionStore: decisionStore, columns: columns)
                 case .help:
                     UtilityPlaceholderView(title: "Help", icon: "questionmark.circle", description: "Get help using Prunely")
                 }

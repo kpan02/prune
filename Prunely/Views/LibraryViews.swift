@@ -26,16 +26,21 @@ struct MediaGridView: View {
         if albumsWithUnreviewedPhotos.isEmpty {
             EmptyStateView(title: "All Done!", message: "You've reviewed all media albums")
         } else {
-            VStack(spacing: 10) {
-                VStack(spacing: 4) {
-                    Text("Media")
-                        .font(.system(size: 28, weight: .semibold))
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Media")
+                            .font(.system(size: 28, weight: .semibold))
+                        
+                        Text("\(albumsWithUnreviewedPhotos.count) albums")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     
-                    Text("\(albumsWithUnreviewedPhotos.count) albums")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity)
+                .padding(.bottom, 8)
 
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(albumsWithUnreviewedPhotos, id: \.localIdentifier) { album in
@@ -80,16 +85,21 @@ struct AlbumsGridView: View {
         if albumsWithUnreviewedPhotos.isEmpty {
             EmptyStateView(title: "All Done!", message: "You've reviewed all your albums")
         } else {
-            VStack(spacing: 10) {
-                VStack(spacing: 4) {
-                    Text("Albums")
-                        .font(.system(size: 28, weight: .semibold))
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Albums")
+                            .font(.system(size: 28, weight: .semibold))
+                        
+                        Text("\(albumsWithUnreviewedPhotos.count) albums")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     
-                    Text("\(albumsWithUnreviewedPhotos.count) albums")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity)
+                .padding(.bottom, 8)
 
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(albumsWithUnreviewedPhotos, id: \.localIdentifier) { album in
@@ -133,16 +143,21 @@ struct MonthsGridView: View {
         if albumsWithUnreviewedPhotos.isEmpty {
             EmptyStateView(title: "All Done!", message: "You've reviewed all photos in your library")
         } else {
-            VStack(spacing: 10) {
-                VStack(spacing: 4) {
-                    Text("Months")
-                        .font(.system(size: 28, weight: .semibold))
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Months")
+                            .font(.system(size: 28, weight: .semibold))
+                        
+                        Text("\(albumsWithUnreviewedPhotos.count) albums")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     
-                    Text("\(albumsWithUnreviewedPhotos.count) albums")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity)
+                .padding(.bottom, 8)
 
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(albumsWithUnreviewedPhotos) { monthAlbum in

@@ -15,6 +15,7 @@ struct PhotoDecisions: Codable {
     var lastUpdated: Date
     var totalPhotosDeleted: Int?
     var totalStorageFreed: Int64?
+    var totalArchivedStorage: Int64?
     
     static var empty: PhotoDecisions {
         PhotoDecisions(
@@ -22,7 +23,8 @@ struct PhotoDecisions: Codable {
             trashedPhotoIDs: [],
             lastUpdated: Date(),
             totalPhotosDeleted: 0,
-            totalStorageFreed: 0
+            totalStorageFreed: 0,
+            totalArchivedStorage: 0
         )
     }
 }
@@ -33,6 +35,7 @@ class PhotoDecisionStore: ObservableObject {
     @Published private(set) var trashedPhotoIDs: Set<String> = []
     @Published private(set) var totalPhotosDeleted: Int = 0
     @Published private(set) var totalStorageFreed: Int64 = 0
+    @Published private(set) var totalArchivedStorage: Int64 = 0
     
     private let fileURL: URL
     
@@ -55,20 +58,32 @@ class PhotoDecisionStore: ObservableObject {
     func archive(_ photoID: String) {
         archivedPhotoIDs.insert(photoID)
         trashedPhotoIDs.remove(photoID) // Remove from trash if it was there
+        // Invalidate cached storage - will be recalculated when Archive view loads
+        totalArchivedStorage = 0
         save()
     }
     
     /// Mark a photo for deletion (pending)
     func trash(_ photoID: String) {
+        let wasArchived = archivedPhotoIDs.contains(photoID)
         trashedPhotoIDs.insert(photoID)
         archivedPhotoIDs.remove(photoID) // Remove from archive if it was there
+        // Invalidate cached storage if photo was archived
+        if wasArchived {
+            totalArchivedStorage = 0
+        }
         save()
     }
     
     /// Restore a photo from archive or trash back to unreviewed
     func restore(_ photoID: String) {
+        let wasArchived = archivedPhotoIDs.contains(photoID)
         archivedPhotoIDs.remove(photoID)
         trashedPhotoIDs.remove(photoID)
+        // Invalidate cached storage if photo was archived
+        if wasArchived {
+            totalArchivedStorage = 0
+        }
         save()
     }
     
@@ -79,7 +94,7 @@ class PhotoDecisionStore: ObservableObject {
         trashedPhotoIDs.removeAll()
         totalPhotosDeleted += photosDeleted
         totalStorageFreed += storageFreed
-        cleanupOrphanedIDs()
+        validateAndCleanup()
         save()
     }
     
@@ -105,7 +120,8 @@ class PhotoDecisionStore: ObservableObject {
             trashedPhotoIDs: trashedPhotoIDs,
             lastUpdated: Date(),
             totalPhotosDeleted: totalPhotosDeleted,
-            totalStorageFreed: totalStorageFreed
+            totalStorageFreed: totalStorageFreed,
+            totalArchivedStorage: totalArchivedStorage
         )
         
         do {
@@ -135,16 +151,20 @@ class PhotoDecisionStore: ObservableObject {
             // Handle backward compatibility: if stats don't exist in old data, default to 0
             self.totalPhotosDeleted = decisions.totalPhotosDeleted ?? 0
             self.totalStorageFreed = decisions.totalStorageFreed ?? 0
+            self.totalArchivedStorage = decisions.totalArchivedStorage ?? 0
         } catch {
             print("Failed to load decisions: \(error)")
             // Start fresh if file is corrupted
         }
     }
     
-    // MARK: - Cleanup
+    // MARK: - Validation
     
-    /// Remove IDs that no longer exist in the Photos library
-    private func cleanupOrphanedIDs() {
+    /// Validate and remove IDs that no longer exist in the Photos library
+    /// Checks both archived and trashed photo IDs
+    func validateAndCleanup() {
+        var hasChanges = false
+        
         // Validate archived IDs
         if !archivedPhotoIDs.isEmpty {
             let archivedAssets = PHAsset.fetchAssets(withLocalIdentifiers: Array(archivedPhotoIDs), options: nil)
@@ -152,11 +172,29 @@ class PhotoDecisionStore: ObservableObject {
             archivedAssets.enumerateObjects { asset, _, _ in
                 validArchived.insert(asset.localIdentifier)
             }
-            archivedPhotoIDs = validArchived
+            if archivedPhotoIDs.count != validArchived.count {
+                archivedPhotoIDs = validArchived
+                hasChanges = true
+                totalArchivedStorage = 0
+            }
         }
         
-        // Note: trashedPhotoIDs are already cleared by emptyTrash(),
-        // so no need to validate them here
+        // Validate trashed IDs
+        if !trashedPhotoIDs.isEmpty {
+            let trashedAssets = PHAsset.fetchAssets(withLocalIdentifiers: Array(trashedPhotoIDs), options: nil)
+            var validTrashed: Set<String> = []
+            trashedAssets.enumerateObjects { asset, _, _ in
+                validTrashed.insert(asset.localIdentifier)
+            }
+            if trashedPhotoIDs.count != validTrashed.count {
+                trashedPhotoIDs = validTrashed
+                hasChanges = true
+            }
+        }
+        
+        if hasChanges {
+            save()
+        }
     }
     
     // MARK: - Debug
@@ -166,6 +204,13 @@ class PhotoDecisionStore: ObservableObject {
         trashedPhotoIDs.removeAll()
         totalPhotosDeleted = 0
         totalStorageFreed = 0
+        totalArchivedStorage = 0
+        save()
+    }
+    
+    /// Update the cached archived storage value (called after async calculation)
+    func updateArchivedStorage(_ storage: Int64) {
+        totalArchivedStorage = storage
         save()
     }
     

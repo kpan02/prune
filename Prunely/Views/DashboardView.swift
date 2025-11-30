@@ -1,0 +1,216 @@
+//
+//  DashboardView.swift
+//  Prunely
+//
+
+import SwiftUI
+import Photos
+
+struct DashboardView: View {
+    @ObservedObject var photoLibrary: PhotoLibraryManager
+    @ObservedObject var decisionStore: PhotoDecisionStore
+    
+    @State private var totalPhotos: Int = 0
+    @State private var isLoadingTotal = true
+    
+    private var reviewedCount: Int {
+        decisionStore.archivedPhotoIDs.count + decisionStore.trashedPhotoIDs.count
+    }
+    
+    private var unreviewedCount: Int {
+        max(0, totalPhotos - reviewedCount)
+    }
+    
+    private var reviewPercentage: Double {
+        guard totalPhotos > 0 else { return 0 }
+        return Double(reviewedCount) / Double(totalPhotos) * 100
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Dashboard")
+                        .font(.system(size: 28, weight: .semibold))
+                }
+                
+                Spacer()
+            }
+            .padding(.bottom, 8)
+            
+            // Cards
+            HStack(alignment: .top, spacing: 16) {
+                // Overview Card
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Overview")
+                        .font(.system(size: 20, weight: .semibold))
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        OverviewStatRow(
+                            label: "Total Photos",
+                            value: isLoadingTotal ? "..." : formatNumber(totalPhotos),
+                            icon: "photo.on.rectangle",
+                            color: .blue
+                        )
+                        
+                        OverviewStatRow(
+                            label: "Reviewed",
+                            value: formatNumber(reviewedCount),
+                            subtitle: totalPhotos > 0 ? String(format: "%.2f%%", reviewPercentage) : nil,
+                            icon: "checkmark.circle.fill",
+                            color: .green
+                        )
+                        
+                        OverviewStatRow(
+                            label: "Unreviewed",
+                            value: isLoadingTotal ? "..." : formatNumber(unreviewedCount),
+                            subtitle: totalPhotos > 0 ? String(format: "%.2f%%", 100 - reviewPercentage) : nil,
+                            icon: "circle",
+                            color: .orange
+                        )
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: 400, maxHeight: .infinity, alignment: .topLeading)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(hex: 0xF8F9FA))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                
+                // Deletion Statistics Card
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("Pruned")
+                        .font(.system(size: 20, weight: .semibold))
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        DeletionStatRow(
+                            label: "Photos Deleted",
+                            value: formatNumber(decisionStore.totalPhotosDeleted),
+                            icon: "trash.fill",
+                            color: .red
+                        )
+                        
+                        DeletionStatRow(
+                            label: "Storage Saved",
+                            value: formatFileSize(decisionStore.totalStorageFreed),
+                            icon: "externaldrive.fill",
+                            color: .blue
+                        )
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: 400, maxHeight: .infinity, alignment: .topLeading)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(hex: 0xF8F9FA))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                )
+            }
+            
+            Spacer()
+        }
+        .onAppear {
+            calculateTotalPhotos()
+        }
+    }
+    
+    private func calculateTotalPhotos() {
+        guard isLoadingTotal else { return }
+        
+        // Calculate total photo count on background thread
+        Task.detached(priority: .userInitiated) {
+            let fetchOptions = PHFetchOptions()
+            fetchOptions.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
+            let results = PHAsset.fetchAssets(with: fetchOptions)
+            let count = results.count
+            
+            await MainActor.run {
+                totalPhotos = count
+                isLoadingTotal = false
+            }
+        }
+    }
+    
+    private func formatNumber(_ number: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: number)) ?? "\(number)"
+    }
+    
+    private func formatFileSize(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+}
+
+struct OverviewStatRow: View {
+    let label: String
+    let value: String
+    var subtitle: String? = nil
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundStyle(color)
+                .frame(width: 24, alignment: .leading)
+            
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+            
+            Spacer(minLength: 8)
+            
+            HStack(spacing: 4) {
+                Text(value)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+                
+                if let subtitle = subtitle {
+                    Text("(\(subtitle))")
+                        .font(.system(size: 14))
+                        .foregroundStyle(color)
+                }
+            }
+        }
+    }
+}
+
+struct DeletionStatRow: View {
+    let label: String
+    let value: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundStyle(color)
+                .frame(width: 24)
+            
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+            
+            Spacer(minLength: 8)
+            
+            Text(value)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.primary)
+        }
+    }
+}
+
