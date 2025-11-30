@@ -29,7 +29,11 @@ struct Sidebar: View {
             
             VStack(spacing: 2) {
                 ForEach(SidebarTab.utilityTabs, id: \.self) { tab in
-                    SidebarItem(tab: tab, isSelected: selectedTab == tab) {
+                    SidebarItem(
+                        tab: tab,
+                        isSelected: selectedTab == tab,
+                        showBadge: tab == .trash && !decisionStore.trashedPhotoIDs.isEmpty
+                    ) {
                         selectedTab = tab
                     }
                 }
@@ -86,6 +90,7 @@ struct SidebarSectionHeader: View {
 struct SidebarItem: View {
     let tab: SidebarTab
     let isSelected: Bool
+    var showBadge: Bool = false
     let action: () -> Void
     @State private var isHovered = false
     
@@ -98,6 +103,12 @@ struct SidebarItem: View {
                 Text(tab.rawValue)
                     .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
                 Spacer()
+                
+                if showBadge {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 6, height: 6)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

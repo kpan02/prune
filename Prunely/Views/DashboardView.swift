@@ -75,7 +75,7 @@ struct DashboardView: View {
                 .frame(maxWidth: 400, maxHeight: .infinity, alignment: .topLeading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: 0xF8F9FA))
+                        .fill(Color(hex: 0xF2F7FD))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
                                 .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
@@ -107,7 +107,7 @@ struct DashboardView: View {
                 .frame(maxWidth: 400, maxHeight: .infinity, alignment: .topLeading)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: 0xF8F9FA))
+                        .fill(Color(hex: 0xF2F7FD))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
                                 .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
