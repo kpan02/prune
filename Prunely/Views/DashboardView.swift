@@ -148,6 +148,20 @@ struct DashboardView: View {
             }
             .padding(.top, 16)
             
+            // Top Unreviewed Months
+            HStack {
+                Spacer()
+                
+                TopUnreviewedMonthsView(
+                    photoLibrary: photoLibrary,
+                    decisionStore: decisionStore
+                )
+                .frame(width: 816) // 400 + 16 + 400
+                
+                Spacer()
+            }
+            .padding(.top, 16)
+            
             // Photo Count Chart
             HStack {
                 Spacer()
@@ -572,7 +586,7 @@ struct PhotoCountChartView: View {
                                     Text(label)
                                         .font(.system(size: 9))
                                         .foregroundStyle(.secondary)
-                                        .frame(height: chartHeight / CGFloat(yAxisLabels.count - 1), alignment: .top)
+                                        .frame(height: safeYAxisRowHeight, alignment: .top)
                                 }
                             }
                             .frame(width: 40, height: chartHeight)
@@ -646,6 +660,13 @@ struct PhotoCountChartView: View {
     private let barWidth: CGFloat = 30
     private let chartHeight: CGFloat = 250
     
+    private var safeYAxisRowHeight: CGFloat {
+        // Ensure we never divide by zero and always return a finite, non-negative height
+        let rows = max(1, yAxisLabels.count - 1)
+        let raw = chartHeight / CGFloat(rows)
+        if raw.isFinite && raw > 0 { return raw }
+        return chartHeight 
+    }
     
     private var yAxisLabels: [String] {
         guard maxCount > 0 else { return ["0"] }
@@ -786,6 +807,144 @@ struct PhotoCountChartView: View {
             await MainActor.run {
                 self.dataPoints = finalPoints
                 self.maxCount = finalMax
+                self.isLoading = false
+            }
+        }
+    }
+}
+
+struct UnreviewedMonth: Identifiable {
+    let id: String
+    let label: String
+    let unreviewedCount: Int
+    let totalCount: Int
+}
+
+struct TopUnreviewedMonthsView: View {
+    @ObservedObject var photoLibrary: PhotoLibraryManager
+    @ObservedObject var decisionStore: PhotoDecisionStore
+    
+    @State private var topMonths: [UnreviewedMonth] = []
+    @State private var isLoading = true
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Biggest Months")
+                .font(.system(size: 20, weight: .semibold))
+            
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 150)
+            } else if topMonths.isEmpty {
+                Text("No unreviewed photos")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 150)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(topMonths.enumerated()), id: \.element.id) { index, month in
+                        HStack(spacing: 12) {
+                            // Rank number
+                            Text("\(index + 1)")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 24, alignment: .trailing)
+                            
+                            // Month label
+                            Text(month.label)
+                                .font(.system(size: 15))
+                                .foregroundStyle(.primary)
+                            
+                            Spacer()
+                            
+                            // Unreviewed count
+                            Text("\(month.unreviewedCount) Unreviewed")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: 816)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(hex: 0xF2F7FD))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .onAppear {
+            calculateTopMonths()
+        }
+        .onChange(of: decisionStore.archivedPhotoIDs.count) { _, _ in
+            calculateTopMonths()
+        }
+        .onChange(of: decisionStore.trashedPhotoIDs.count) { _, _ in
+            calculateTopMonths()
+        }
+    }
+    
+    private func calculateTopMonths() {
+        isLoading = true
+        
+        // Get reviewed IDs on main actor first
+        let reviewedIDs = decisionStore.archivedPhotoIDs.union(decisionStore.trashedPhotoIDs)
+        
+        Task.detached(priority: .userInitiated) {
+            let calendar = Calendar.current
+            var monthData: [String: (total: Int, unreviewed: Int, date: Date)] = [:]
+            
+            // Fetch all photos
+            let fetchOptions = PHFetchOptions()
+            fetchOptions.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
+            let results = PHAsset.fetchAssets(with: fetchOptions)
+            
+            // Group photos by month and count unreviewed
+            results.enumerateObjects { asset, _, _ in
+                guard let creationDate = asset.creationDate else { return }
+                let components = calendar.dateComponents([.year, .month], from: creationDate)
+                guard let year = components.year, let month = components.month else { return }
+                
+                let key = "\(year)-\(String(format: "%02d", month))"
+                
+                if monthData[key] == nil {
+                    monthData[key] = (total: 0, unreviewed: 0, date: calendar.date(from: components) ?? creationDate)
+                }
+                
+                monthData[key]?.total += 1
+                
+                if !reviewedIDs.contains(asset.localIdentifier) {
+                    monthData[key]?.unreviewed += 1
+                }
+            }
+            
+            // Convert to array and sort by unreviewed count (descending)
+            let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            let sortedMonths = monthData
+                .filter { $0.value.unreviewed > 0 } 
+                .sorted { $0.value.unreviewed > $1.value.unreviewed } 
+                .prefix(5) 
+                .map { key, value in
+                    let components = calendar.dateComponents([.year, .month], from: value.date)
+                    let year = components.year ?? 0
+                    let month = components.month ?? 1
+                    let label = "\(monthNames[month - 1]) \(year)"
+                    
+                    return UnreviewedMonth(
+                        id: key,
+                        label: label,
+                        unreviewedCount: value.unreviewed,
+                        totalCount: value.total
+                    )
+                }
+            
+            let finalMonths = Array(sortedMonths)
+            
+            await MainActor.run {
+                self.topMonths = finalMonths
                 self.isLoading = false
             }
         }
