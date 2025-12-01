@@ -209,6 +209,23 @@ struct PhotoReviewView: View {
                 .foregroundStyle(status == .kept ? .green : .red)
             }
             
+            // Favorite badge
+            if let asset = currentAsset, asset.isFavorite {
+                HStack(spacing: 5) {
+                    Image(systemName: "star.fill")
+                        .font(.caption)
+                    Text("Favorite")
+                        .font(.caption.weight(.medium))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(Color.yellow.opacity(0.15))
+                )
+                .foregroundStyle(.yellow)
+            }
+            
             // Date
             HStack(spacing: 5) {
                 Image(systemName: "calendar")
@@ -257,10 +274,39 @@ struct PhotoReviewView: View {
                         .buttonStyle(.borderedProminent)
                     }
                 } else if let image = currentImage {
-                    Image(nsImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: proxy.size.width, maxHeight: proxy.size.height)
+                    ZStack {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: proxy.size.width, maxHeight: proxy.size.height)
+                        
+                        // Overlay favorite indicator on the photo itself
+                        if let asset = currentAsset, asset.isFavorite {
+                            GeometryReader { imageProxy in
+                                let imageSize = image.size
+                                let containerSize = imageProxy.size
+                                let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+                                let scaledWidth = imageSize.width * scale
+                                let scaledHeight = imageSize.height * scale
+                                let xOffset = (containerSize.width - scaledWidth) / 2
+                                let yOffset = (containerSize.height - scaledHeight) / 2
+                                
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 25, weight: .semibold))
+                                    .foregroundStyle(.yellow)
+                                    .padding(5)
+                                    .background(
+                                        Circle()
+                                            .fill(Color.white.opacity(1))
+                                            .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                                    )
+                                    .position(
+                                        x: xOffset + scaledWidth - 25,
+                                        y: yOffset + 25
+                                    )
+                            }
+                        }
+                    }
                 } else if isLoading {
                     ProgressView()
                         .scaleEffect(1.5)
@@ -725,7 +771,16 @@ struct FilmstripThumbnail: View {
             .scaleEffect(isSelected ? 1.1 : 1.0)
             .animation(.easeInOut(duration: 0.15), value: isSelected)
             
-            // Decision indicator
+            // Favorite indicator (top-left)
+            if asset.isFavorite {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.yellow)
+                    .offset(x: -4, y: -4)
+                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+            }
+            
+            // Decision indicator (top-right)
             if let status = decisionStatus {
                 Circle()
                     .fill(status == .kept ? Color.green : Color.red)
