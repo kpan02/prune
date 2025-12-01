@@ -328,6 +328,9 @@ struct PhotoReviewView: View {
                             thumbnail: thumbnailCache[asset.localIdentifier]
                         )
                         .id(asset.localIdentifier)
+                        .onTapGesture {
+                            currentPhotoId = asset.localIdentifier
+                        }
                         .onAppear {
                             loadThumbnail(for: asset)
                         }
@@ -359,60 +362,104 @@ struct PhotoReviewView: View {
     private var controlsBar: some View {
         ZStack {
             // Navigation and decision buttons - centered
-            HStack(spacing: 16) {
-                // Navigation: Back Button
-                Button {
-                    goToPrevious()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
-                    }
-                    .frame(width: 68, height: 44, alignment: .center)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .keyboardShortcut(.leftArrow, modifiers: [])
-                
-                // Keep and Delete Buttons
-                VStack(spacing: 8) {
+            VStack(spacing: 4) {
+                HStack(spacing: 16) {
+                    // Navigation: Back Button
                     Button {
-                        handleAccept()
+                        goToPrevious()
                     } label: {
-                        Label("Keep  ", systemImage: "arrow.up")
-                            .frame(minWidth: 120)
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
+                        }
+                        .frame(width: 68, height: 44, alignment: .center)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.green)
+                    .buttonStyle(.bordered)
                     .controlSize(.large)
-                    .keyboardShortcut(.upArrow, modifiers: [])
+                    .keyboardShortcut(.leftArrow, modifiers: [])
                     
-                    Button {
-                        handleDelete()
-                    } label: {
-                        Label("Delete", systemImage: "arrow.down")
-                            .frame(minWidth: 120)
+                    // Keep and Delete Buttons
+                    VStack(spacing: 8) {
+                        Button {
+                            handleAccept()
+                        } label: {
+                            Label("Keep  ", systemImage: "arrow.up")
+                                .frame(minWidth: 120)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                        .controlSize(.large)
+                        .keyboardShortcut(.upArrow, modifiers: [])
+                        
+                        Button {
+                            handleDelete()
+                        } label: {
+                            Label("Delete", systemImage: "arrow.down")
+                                .frame(minWidth: 120)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.red)
+                        .controlSize(.large)
+                        .keyboardShortcut(.downArrow, modifiers: [])
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.red)
+                    
+                    // Navigation: Next Button
+                    Button {
+                        goToNext()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("Next")
+                            Image(systemName: "chevron.right")
+                        }
+                        .frame(width: 68, height: 44, alignment: .center)
+                    }
+                    .buttonStyle(.bordered)
                     .controlSize(.large)
-                    .keyboardShortcut(.downArrow, modifiers: [])
+                    .keyboardShortcut(.rightArrow, modifiers: [])
                 }
                 
-                // Navigation: Next Button
-                Button {
-                    goToNext()
-                } label: {
-                    HStack(spacing: 6) {
-                        Text("Next")
-                        Image(systemName: "chevron.right")
-                    }
-                    .frame(width: 68, height: 44, alignment: .center)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .keyboardShortcut(.rightArrow, modifiers: [])
+                // Footer text
+                Text("(use arrow keys)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
             }
+            
+            // Undo button - bottom left (only visible when photo is reviewed)
+            HStack {
+                if currentDecisionStatus != nil {
+                    Button {
+                        handleClearDecision()
+                    } label: {
+                        HStack(spacing: 8) {                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Clear Decision")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.white)
+                                Text("       [space]")
+                                    .font(.system(size: 11, weight: .regular))
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.black)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .strokeBorder(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.space, modifiers: [])
+                }
+                Spacer()
+            }
+            .padding(.leading, 12)
+            .padding(.bottom, 8)
             
             // Hide reviewed toggle - bottom right
             HStack {
@@ -424,16 +471,11 @@ struct PhotoReviewView: View {
                 .toggleStyle(.checkbox)
                 .help("Show only unreviewed photos")
             }
+            .padding(.bottom, 8)
         }
-        .padding()
+        .padding([.horizontal, .top])
+        .padding(.bottom, 6)
         .background(Color.white)
-
-        // Hidden button for spacebar to clear decision
-        .background(
-            Button("") { handleClearDecision() }
-                .keyboardShortcut(.space, modifiers: [])
-                .opacity(0)
-        )
     }
     
     private func feedbackToast(feedback: ReviewFeedback) -> some View {
@@ -505,27 +547,20 @@ struct PhotoReviewView: View {
     
     private func advanceAfterDecision(from photoId: String) {
         if hideReviewed {
-            // When hiding reviewed, the current photo disappears from displayedPhotos
-            // We need to find the next unreviewed photo
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                // Find what would be the next photo after the one we just reviewed
-                // Look in allPhotos to find position, then find next unreviewed
                 if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
-                    // Look for next unreviewed photo after this position
                     for i in (originalIndex + 1)..<allPhotos.count {
                         if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
                             currentPhotoId = allPhotos[i].localIdentifier
                             return
                         }
                     }
-                    // No more after, try from beginning
                     for i in 0..<originalIndex {
                         if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
                             currentPhotoId = allPhotos[i].localIdentifier
                             return
                         }
                     }
-                    // All reviewed
                     isCompleted = true
                 } else {
                     isCompleted = true
@@ -539,32 +574,23 @@ struct PhotoReviewView: View {
     
     private func handleToggleChange(wasHiding: Bool, nowHiding: Bool) {
         guard let photoId = currentPhotoId else {
-            // No current photo, initialize
             if let first = displayedPhotos.first {
                 currentPhotoId = first.localIdentifier
             }
             return
         }
         
-        // Check if current photo is still in the new displayed list
         if displayedPhotos.contains(where: { $0.localIdentifier == photoId }) {
-            // Photo still visible, no change needed - just trigger a scroll update
-            // The filmstrip will update automatically
             return
         }
         
-        // Photo is no longer visible (it was reviewed and we're now hiding reviewed)
-        // Find the nearest photo in the new list
         if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
-            // Try to find closest unreviewed photo
-            // First look forward
             for i in originalIndex..<allPhotos.count {
                 if displayedPhotos.contains(where: { $0.localIdentifier == allPhotos[i].localIdentifier }) {
                     currentPhotoId = allPhotos[i].localIdentifier
                     return
                 }
             }
-            // Then look backward
             for i in stride(from: originalIndex - 1, through: 0, by: -1) {
                 if displayedPhotos.contains(where: { $0.localIdentifier == allPhotos[i].localIdentifier }) {
                     currentPhotoId = allPhotos[i].localIdentifier
@@ -586,7 +612,7 @@ struct PhotoReviewView: View {
             feedback = type
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
             withAnimation(.easeOut(duration: 0.18)) {
                 if feedback == type {
                     feedback = nil
