@@ -24,7 +24,7 @@ struct MonthAlbum: Identifiable {
 }
 
 @MainActor
-class PhotoLibraryManager: ObservableObject {
+class PhotoLibraryManager: NSObject, ObservableObject, PHPhotoLibraryChangeObserver {
     @Published var authorizationStatus: PHAuthorizationStatus = .notDetermined
     @Published var monthAlbums: [MonthAlbum] = []
     @Published var utilityAlbums: [PHAssetCollection] = []
@@ -38,8 +38,22 @@ class PhotoLibraryManager: ObservableObject {
         return formatter
     }()
     
-    init() {
+    override init() {
+        super.init()
         checkAuthorizationStatus()
+        PHPhotoLibrary.shared().register(self)
+    }
+    
+    nonisolated deinit {
+        unregisterObserver()
+    }
+    
+    nonisolated private func unregisterObserver() {
+        if let observer = self as AnyObject as? PHPhotoLibraryChangeObserver {
+            PHPhotoLibrary.shared().unregisterChangeObserver(observer)
+        } else {
+            assertionFailure("PhotoLibraryManager should always conform to PHPhotoLibraryChangeObserver")
+        }
     }
     
     func checkAuthorizationStatus() {
@@ -259,5 +273,13 @@ class PhotoLibraryManager: ObservableObject {
         let orphanedIDs = photoIDs.subtracting(foundIDs)
         
         return (validPhotos, orphanedIDs)
+    }
+    
+    // MARK: - PHPhotoLibraryChangeObserver
+    
+    func photoLibraryDidChange(_ changeInstance: PHChange) {
+        Task { @MainActor in
+            self.fetchAlbums()
+        }
     }
 }
