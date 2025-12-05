@@ -97,9 +97,15 @@ struct SidebarItem: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 14))
-                    .frame(width: 20)
+                if tab.icon.unicodeScalars.first?.properties.isEmoji == true {
+                    Text(tab.icon)
+                        .font(.system(size: 14))
+                        .frame(width: 20)
+                } else {
+                    Image(systemName: tab.icon)
+                        .font(.system(size: 14))
+                        .frame(width: 20)
+                }
                 Text(tab.rawValue)
                     .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
                 Spacer()

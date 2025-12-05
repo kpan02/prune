@@ -14,7 +14,7 @@ enum SidebarTab: String, CaseIterable {
     case trash = "Trash"
     case dashboard = "Dashboard"
     case archive = "Archive"
-    case help = "Help"
+    case help = "Guide"
     
     var icon: String {
         switch self {
@@ -24,7 +24,7 @@ enum SidebarTab: String, CaseIterable {
         case .trash: return "trash"
         case .dashboard: return "chart.bar.fill"
         case .archive: return "archivebox.fill"
-        case .help: return "questionmark.circle"
+        case .help: return "💡"
         }
     }
     

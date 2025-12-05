@@ -101,7 +101,7 @@ struct TabContentView: View {
                 case .archive:
                     ArchiveGridView(photoLibrary: photoLibrary, decisionStore: decisionStore, columns: columns)
                 case .help:
-                    UtilityPlaceholderView(title: "Help", icon: "questionmark.circle", description: "Get help using Prune")
+                    GuideView()
                 }
             }
             .padding(.horizontal, 20)
