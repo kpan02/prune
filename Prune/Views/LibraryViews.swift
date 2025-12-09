@@ -322,7 +322,7 @@ struct MonthAlbumThumbnail: View {
     private func loadCoverImage() {
         guard let coverAsset = monthAlbum.coverPhoto else { return }
         photoLibrary.loadThumbnail(for: coverAsset, size: CGSize(width: 320, height: 320)) { image in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.coverImage = image
             }
         }
@@ -429,7 +429,7 @@ struct AlbumThumbnail: View {
     private func loadCoverImage() {
         guard let coverAsset = photoLibrary.getCoverPhoto(for: album) else { return }
         photoLibrary.loadThumbnail(for: coverAsset, size: CGSize(width: 320, height: 320)) { image in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.coverImage = image
             }
         }

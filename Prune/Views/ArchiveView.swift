@@ -128,11 +128,18 @@ struct ArchiveGridView: View {
     private func loadArchivedPhotos() {
         isLoading = true
         
-        // Validate and cleanup orphaned IDs before loading
-        decisionStore.validateAndCleanup()
-        
-        let archivedIDs = decisionStore.archivedPhotoIDs
-        
+        // Validate and cleanup orphaned IDs before loading (async, non-blocking)
+        Task {
+            await decisionStore.validateAndCleanup()
+            // Reload after validation completes
+            await MainActor.run {
+                let archivedIDs = decisionStore.archivedPhotoIDs
+                loadPhotosAfterValidation(archivedIDs: archivedIDs)
+            }
+        }
+    }
+    
+    private func loadPhotosAfterValidation(archivedIDs: Set<String>) {
         guard !archivedIDs.isEmpty else {
             archivedPhotos = []
             isLoading = false
@@ -310,7 +317,7 @@ struct ArchivePhotoThumbnail: View {
     private func loadThumbnail() {
         guard thumbnail == nil else { return }
         photoLibrary.loadThumbnail(for: asset, size: CGSize(width: 320, height: 320)) { image in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.thumbnail = image
             }
         }

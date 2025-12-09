@@ -383,7 +383,8 @@ struct PhotoReviewView: View {
             .onAppear {
                 // Initial scroll to current position
                 if let photoId = currentPhotoId {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                         scrollProxy.scrollTo(photoId, anchor: .center)
                     }
                 }
@@ -595,7 +596,7 @@ struct PhotoReviewView: View {
         guard let asset = currentAsset, let photoId = currentPhotoId else { return }
         photoLibrary.toggleFavorite(for: asset) { success in
             if success {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     let fetchOptions = PHFetchOptions()
                     if PHAsset.fetchAssets(withLocalIdentifiers: [photoId], options: fetchOptions).firstObject != nil {
                         self.refreshTrigger = UUID()
@@ -623,7 +624,8 @@ struct PhotoReviewView: View {
     
     private func advanceAfterDecision(from photoId: String) {
         if hideReviewed {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
                 if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
                     for i in (originalIndex + 1)..<allPhotos.count {
                         if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
@@ -688,7 +690,8 @@ struct PhotoReviewView: View {
             feedback = type
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 650_000_000) // 0.65 seconds
             withAnimation(.easeOut(duration: 0.18)) {
                 if feedback == type {
                     feedback = nil
@@ -717,19 +720,17 @@ struct PhotoReviewView: View {
         isLoading = true
         
         // Add timeout to prevent indefinite loading
-        let timeoutTask = DispatchWorkItem {
-            DispatchQueue.main.async {
-                if self.currentPhotoId == assetId && self.currentImage == nil && !self.imageLoadFailed {
-                    Self.logger.warning("Image load timeout for asset: \(assetId, privacy: .public)")
-                    self.imageLoadFailed = true
-                    self.isLoading = false
-                }
+        let timeoutTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+            if currentPhotoId == assetId && currentImage == nil && !imageLoadFailed {
+                Self.logger.warning("Image load timeout for asset: \(assetId, privacy: .public)")
+                imageLoadFailed = true
+                isLoading = false
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: timeoutTask)
         
         photoLibrary.loadHighQualityImage(for: asset) { image in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 timeoutTask.cancel()
                 guard self.currentPhotoId == assetId else { return }
                 
@@ -780,7 +781,7 @@ struct PhotoReviewView: View {
             guard preloadedImages[nextId] == nil else { continue }
             
             photoLibrary.loadHighQualityImage(for: nextAsset) { image in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     if let image = image {
                         self.preloadedImages[nextId] = image
                     }
@@ -806,7 +807,7 @@ struct PhotoReviewView: View {
         guard thumbnailCache[asset.localIdentifier] == nil else { return }
         
         photoLibrary.loadThumbnail(for: asset, size: CGSize(width: 120, height: 120)) { image in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 if let image = image {
                     self.thumbnailCache[asset.localIdentifier] = image
                 }

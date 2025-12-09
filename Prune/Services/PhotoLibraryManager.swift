@@ -294,7 +294,7 @@ class PhotoLibraryManager: NSObject, ObservableObject, PHPhotoLibraryChangeObser
             if let error = error {
                 self.logger.error("Failed to toggle favorite: \(error.localizedDescription, privacy: .public)")
             }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 completion(success)
             }
         })

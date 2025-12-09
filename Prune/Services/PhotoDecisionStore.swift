@@ -98,7 +98,9 @@ class PhotoDecisionStore: ObservableObject {
         trashedPhotoIDs.removeAll()
         totalPhotosDeleted += photosDeleted
         totalStorageFreed += storageFreed
-        validateAndCleanup()
+        Task {
+            await validateAndCleanup()
+        }
         save()
     }
     
@@ -166,38 +168,52 @@ class PhotoDecisionStore: ObservableObject {
     
     /// Validate and remove IDs that no longer exist in the Photos library
     /// Checks both archived and trashed photo IDs
-    func validateAndCleanup() {
+    /// Runs on background thread to avoid blocking the main thread
+    func validateAndCleanup() async {
         var hasChanges = false
+        var validArchived: Set<String> = []
+        var validTrashed: Set<String> = []
         
-        // Validate archived IDs
+        // Validate archived IDs on background thread
         if !archivedPhotoIDs.isEmpty {
-            let archivedAssets = PHAsset.fetchAssets(withLocalIdentifiers: Array(archivedPhotoIDs), options: nil)
-            var validArchived: Set<String> = []
+            let archivedIDs = archivedPhotoIDs // Capture on main actor
+            let archivedAssets = await Task.detached(priority: .userInitiated) {
+                PHAsset.fetchAssets(withLocalIdentifiers: Array(archivedIDs), options: nil)
+            }.value
+            
             archivedAssets.enumerateObjects { asset, _, _ in
                 validArchived.insert(asset.localIdentifier)
             }
-            if archivedPhotoIDs.count != validArchived.count {
+        }
+        
+        // Validate trashed IDs on background thread
+        if !trashedPhotoIDs.isEmpty {
+            let trashedIDs = trashedPhotoIDs // Capture on main actor
+            let trashedAssets = await Task.detached(priority: .userInitiated) {
+                PHAsset.fetchAssets(withLocalIdentifiers: Array(trashedIDs), options: nil)
+            }.value
+            
+            trashedAssets.enumerateObjects { asset, _, _ in
+                validTrashed.insert(asset.localIdentifier)
+            }
+        }
+        
+        // Update state on main actor
+        await MainActor.run {
+            if !archivedPhotoIDs.isEmpty && archivedPhotoIDs.count != validArchived.count {
                 archivedPhotoIDs = validArchived
                 hasChanges = true
                 totalArchivedStorage = 0
             }
-        }
-        
-        // Validate trashed IDs
-        if !trashedPhotoIDs.isEmpty {
-            let trashedAssets = PHAsset.fetchAssets(withLocalIdentifiers: Array(trashedPhotoIDs), options: nil)
-            var validTrashed: Set<String> = []
-            trashedAssets.enumerateObjects { asset, _, _ in
-                validTrashed.insert(asset.localIdentifier)
-            }
-            if trashedPhotoIDs.count != validTrashed.count {
+            
+            if !trashedPhotoIDs.isEmpty && trashedPhotoIDs.count != validTrashed.count {
                 trashedPhotoIDs = validTrashed
                 hasChanges = true
             }
-        }
-        
-        if hasChanges {
-            save()
+            
+            if hasChanges {
+                save()
+            }
         }
     }
     

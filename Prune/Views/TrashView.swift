@@ -141,11 +141,18 @@ struct TrashGridView: View {
     private func loadTrashedPhotos() {
         isLoading = true
         
-        // Validate and cleanup orphaned IDs before loading
-        decisionStore.validateAndCleanup()
-        
-        let trashedIDs = decisionStore.trashedPhotoIDs
-        
+        // Validate and cleanup orphaned IDs before loading (async, non-blocking)
+        Task {
+            await decisionStore.validateAndCleanup()
+            // Reload after validation completes
+            await MainActor.run {
+                let trashedIDs = decisionStore.trashedPhotoIDs
+                loadPhotosAfterValidation(trashedIDs: trashedIDs)
+            }
+        }
+    }
+    
+    private func loadPhotosAfterValidation(trashedIDs: Set<String>) {
         guard !trashedIDs.isEmpty else {
             trashedPhotos = []
             totalStorage = 0
@@ -318,7 +325,7 @@ struct TrashPhotoThumbnail: View {
     private func loadThumbnail() {
         guard thumbnail == nil else { return }
         photoLibrary.loadThumbnail(for: asset, size: CGSize(width: 320, height: 320)) { image in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.thumbnail = image
             }
         }
