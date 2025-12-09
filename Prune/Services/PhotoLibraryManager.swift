@@ -237,11 +237,31 @@ class PhotoLibraryManager: NSObject, ObservableObject, PHPhotoLibraryChangeObser
         return results.firstObject
     }
 
+    /// Gets the file size of a photo asset.
+    ///
+    /// **Type Conversion Complexity:**
+    /// The `PHAssetResource.value(forKey: "fileSize")` method returns different types depending on:
+    /// - Platform (macOS vs iOS)
+    /// - Photo source (local vs iCloud)
+    /// - Photo format (HEIC, JPEG, RAW, etc.)
+    ///
+    /// This method attempts multiple type conversions to handle all cases:
+    /// - `NSNumber` (most common on macOS)
+    /// - `Int` (32-bit platforms or certain formats)
+    /// - `Int64` (64-bit platforms)
+    /// - `UInt64` (unsigned representation)
+    ///
+    /// Returns `nil` if the file size cannot be determined (e.g., iCloud-only photos
+    /// that haven't been downloaded, or unsupported formats).
+    ///
+    /// - Parameter asset: The photo asset to get the file size for
+    /// - Returns: The file size in bytes, or `nil` if unavailable
     func getFileSize(for asset: PHAsset) -> Int64? {
         let resources = PHAssetResource.assetResources(for: asset)
         guard let resource = resources.first else { return nil }
 
         // Try multiple type conversions for fileSize (can be NSNumber, Int, Int64, etc.)
+        // This handles platform differences and various photo formats
         if let fileSizeValue = resource.value(forKey: "fileSize") {
             if let number = fileSizeValue as? NSNumber {
                 return number.int64Value
@@ -256,8 +276,22 @@ class PhotoLibraryManager: NSObject, ObservableObject, PHPhotoLibraryChangeObser
         return nil
     }
 
-    /// Fetch photos by their local identifiers, filtering out any that no longer exist
-    /// Returns both the valid photos and the set of orphaned IDs that were removed
+    /// Fetches photos by their local identifiers, filtering out any that no longer exist.
+    ///
+    /// **Orphaned IDs occur when:**
+    /// - Photos are deleted outside of the app (e.g., in Photos app, iCloud sync)
+    /// - Photos are removed from the library entirely
+    /// - Photos are moved to different albums or collections (though IDs usually persist)
+    ///
+    /// **Returns:**
+    /// - `photos`: Array of valid `PHAsset` objects that were found
+    /// - `orphanedIDs`: Set of photo IDs that were requested but no longer exist in the library
+    ///
+    /// Callers should handle orphaned IDs by removing them from their data structures
+    /// (e.g., `PhotoDecisionStore` removes them from archived/trashed sets).
+    ///
+    /// - Parameter photoIDs: Set of local identifiers to fetch
+    /// - Returns: Tuple containing valid photos and orphaned IDs
     func fetchPhotos(byIDs photoIDs: Set<String>) -> (photos: [PHAsset], orphanedIDs: Set<String>) {
         guard !photoIDs.isEmpty else {
             return ([], [])
@@ -298,6 +332,20 @@ class PhotoLibraryManager: NSObject, ObservableObject, PHPhotoLibraryChangeObser
 
     // MARK: - PHPhotoLibraryChangeObserver
 
+    /// Called when the photo library changes (photos added, deleted, modified, etc.).
+    ///
+    /// **Current Implementation:**
+    /// - Only refreshes the album list by calling `fetchAlbums()`
+    /// - Does not handle individual asset property changes (e.g., favorite status)
+    ///
+    /// **Limitations:**
+    /// - Individual asset changes (like favorite toggles) are not automatically reflected
+    /// - Views must manually refetch assets to see property updates
+    /// - This is why `PhotoReviewView.handleToggleFavorite()` manually refetches the asset
+    ///
+    /// **Future Enhancement:**
+    /// Could inspect `PHChange` details to update specific assets or albums more granularly,
+    /// but the current approach of full refresh is simpler and sufficient for most use cases.
     func photoLibraryDidChange(_: PHChange) {
         Task { @MainActor in
             self.fetchAlbums()

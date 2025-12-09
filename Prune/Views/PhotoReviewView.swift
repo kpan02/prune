@@ -33,6 +33,11 @@ struct PhotoReviewView: View {
     @State private var hideReviewed = false // Default: show all photos
     @State private var thumbnailCache: [String: NSImage] = [:]
     @State private var preloadedImages: [String: NSImage] = [:]
+    /// Workaround to force SwiftUI view updates when computed properties depend on mutable state.
+    /// Since `currentAsset` is computed from `allPhotos` and `PHAsset` properties don't trigger
+    /// automatic view updates, changing this UUID forces recomputation of dependent properties
+    /// like `isCurrentPhotoFavorited`. This is a known limitation when working with immutable
+    /// snapshot objects from the Photos framework.
     @State private var refreshTrigger = UUID()
 
     init(albumTitle: String, photos: [PHAsset], photoLibrary: PhotoLibraryManager, decisionStore: PhotoDecisionStore) {
@@ -83,9 +88,12 @@ struct PhotoReviewView: View {
         return nil
     }
 
-    // Current photo's favorite status
+    /// Current photo's favorite status.
+    /// Note: Uses `refreshTrigger` to force recomputation because `PHAsset` objects are immutable
+    /// snapshots. When the favorite status changes, we update the asset in `allPhotos` and change
+    /// `refreshTrigger` to trigger this property's recomputation.
     private var isCurrentPhotoFavorited: Bool {
-        _ = refreshTrigger // Use refresh trigger to force recomputation
+        _ = refreshTrigger // Force recomputation when refreshTrigger changes
         return currentAsset?.isFavorite ?? false
     }
 
@@ -592,19 +600,31 @@ struct PhotoReviewView: View {
         showFeedback(.cleared)
     }
 
+    /// Toggles the favorite status of the current photo.
+    ///
+    /// **Important:** `PHAsset` objects are immutable snapshots. After toggling the favorite
+    /// status in the Photos library, the `PHAsset` object in `allPhotos` still contains the old
+    /// favorite status. This method:
+    /// 1. Toggles the favorite status in the Photos library
+    /// 2. Refetches the asset to get the updated `PHAsset` object
+    /// 3. Replaces the stale asset in `allPhotos` with the updated one
+    /// 4. Updates `refreshTrigger` to force SwiftUI to recompute dependent properties
+    ///
+    /// Without this refetch and update, the favorite button would not reflect the change until
+    /// the user navigates away and returns to the album.
     private func handleToggleFavorite() {
         guard let asset = currentAsset, let photoId = currentPhotoId else { return }
         photoLibrary.toggleFavorite(for: asset) { success in
             if success {
                 Task { @MainActor in
-                    // Refetch the asset to get updated favorite status
+                    // Refetch the asset to get updated favorite status (PHAsset objects are immutable)
                     let fetchOptions = PHFetchOptions()
                     if let updatedAsset = PHAsset.fetchAssets(withLocalIdentifiers: [photoId], options: fetchOptions).firstObject {
-                        // Update the asset in allPhotos array
+                        // Replace stale asset in allPhotos with updated one
                         if let index = self.allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
                             self.allPhotos[index] = updatedAsset
                         }
-                        // Force view update
+                        // Force view update to reflect favorite status change
                         self.refreshTrigger = UUID()
                     }
                 }
@@ -628,53 +648,86 @@ struct PhotoReviewView: View {
         }
     }
 
+    /// Advances to the next unreviewed photo after a decision (archive/trash) is made.
+    ///
+    /// When "hide reviewed" is enabled, this method:
+    /// 1. Waits 50ms to allow the decision store to persist the change (prevents race conditions)
+    /// 2. Searches forward from the current photo for the next unreviewed photo
+    /// 3. If none found forward, wraps around and searches backward from the start
+    /// 4. If no unreviewed photos remain, marks the review as completed
+    ///
+    /// When "hide reviewed" is disabled, simply advances to the next photo in sequence.
+    ///
+    /// - Parameter photoId: The local identifier of the photo that was just reviewed
     private func advanceAfterDecision(from photoId: String) {
         if hideReviewed {
             Task { @MainActor in
+                // Brief delay ensures decision store has persisted the change before we filter
                 try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
                 if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
+                    // Search forward for next unreviewed photo
                     for i in (originalIndex + 1) ..< allPhotos.count {
                         if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
                             currentPhotoId = allPhotos[i].localIdentifier
                             return
                         }
                     }
+                    // Wrap around: search backward from start if none found forward
                     for i in 0 ..< originalIndex {
                         if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
                             currentPhotoId = allPhotos[i].localIdentifier
                             return
                         }
                     }
+                    // No unreviewed photos remaining
                     isCompleted = true
                 } else {
                     isCompleted = true
                 }
             }
         } else {
-            // When showing all, just advance to next
+            // When showing all photos, just advance to next in sequence
             goToNext()
         }
     }
 
+    /// Handles navigation when the "hide reviewed" toggle changes.
+    ///
+    /// When toggling the filter, the current photo might no longer be visible. This method:
+    /// 1. If current photo is still visible, keeps it selected
+    /// 2. Otherwise, searches forward from the original position for the next visible photo
+    /// 3. If none found forward, wraps around and searches backward from the start
+    /// 4. Falls back to the first visible photo if the original photo is no longer visible
+    ///
+    /// This ensures smooth navigation when filtering without jumping to unexpected positions.
+    ///
+    /// - Parameters:
+    ///   - wasHiding: Previous state of the hide reviewed toggle (unused, kept for API compatibility)
+    ///   - nowHiding: New state of the hide reviewed toggle (unused, kept for API compatibility)
     private func handleToggleChange(wasHiding _: Bool, nowHiding _: Bool) {
         guard let photoId = currentPhotoId else {
+            // No current photo, select first visible photo
             if let first = displayedPhotos.first {
                 currentPhotoId = first.localIdentifier
             }
             return
         }
 
+        // Current photo is still visible, keep it selected
         if displayedPhotos.contains(where: { $0.localIdentifier == photoId }) {
             return
         }
 
+        // Current photo is no longer visible, find nearest visible photo
         if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
+            // Search forward from original position
             for i in originalIndex ..< allPhotos.count {
                 if displayedPhotos.contains(where: { $0.localIdentifier == allPhotos[i].localIdentifier }) {
                     currentPhotoId = allPhotos[i].localIdentifier
                     return
                 }
             }
+            // Wrap around: search backward from start
             for i in stride(from: originalIndex - 1, through: 0, by: -1) {
                 if displayedPhotos.contains(where: { $0.localIdentifier == allPhotos[i].localIdentifier }) {
                     currentPhotoId = allPhotos[i].localIdentifier
@@ -683,7 +736,7 @@ struct PhotoReviewView: View {
             }
         }
 
-        // Fallback to first in list
+        // Fallback to first visible photo
         if let first = displayedPhotos.first {
             currentPhotoId = first.localIdentifier
         } else {
@@ -756,6 +809,21 @@ struct PhotoReviewView: View {
         }
     }
 
+    /// Preloads images ahead of the current position using a sliding window cache strategy.
+    ///
+    /// **Caching Strategy:**
+    /// - Maintains a sliding window of 16 full-quality images: 5 before, current, 10 after
+    /// - Images outside this window are evicted to manage memory usage
+    /// - Thumbnails use a larger window (100 before/after) since they're much smaller
+    /// - Preloads the next 3 images to ensure smooth forward navigation
+    ///
+    /// **Rationale:**
+    /// - Full-quality images are memory-intensive (~5-20MB each)
+    /// - Users typically navigate forward, so we keep more images ahead
+    /// - Backward navigation is less common, so fewer images are kept behind
+    /// - Thumbnails are small (~50KB), so a larger cache window is acceptable
+    ///
+    /// This balances memory usage with smooth navigation performance.
     private func preloadNextImages() {
         let photos = displayedPhotos
         guard let currentIdx = photos.firstIndex(where: { $0.localIdentifier == currentPhotoId }) else { return }
@@ -775,7 +843,7 @@ struct PhotoReviewView: View {
         // Also clean up thumbnail cache with a larger window (thumbnails are smaller)
         cleanupThumbnailCache(aroundIndex: currentIdx, in: photos)
 
-        // Preload next 3 images
+        // Preload next 3 images for smooth forward navigation
         for offset in 1 ... 3 {
             let nextIdx = currentIdx + offset
             guard nextIdx < photos.count else { break }
