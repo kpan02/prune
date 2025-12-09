@@ -734,6 +734,8 @@ struct PhotoReviewView: View {
                 
                 if let image = image {
                     self.currentImage = image
+                    // Also cache the current image so we can navigate back to it quickly
+                    self.preloadedImages[assetId] = image
                     self.imageLoadFailed = false
                     self.preloadNextImages()
                 } else {
@@ -747,6 +749,18 @@ struct PhotoReviewView: View {
     private func preloadNextImages() {
         let photos = displayedPhotos
         guard let currentIdx = photos.firstIndex(where: { $0.localIdentifier == currentPhotoId }) else { return }
+        
+        // Clean up cache: keep a sliding window around current position
+        // Keep 5 images before current, current image, and 10 images after (16 total)
+        let keepBefore = 5
+        let keepAfter = 10
+        let startIdx = max(0, currentIdx - keepBefore)
+        let endIdx = min(photos.count - 1, currentIdx + keepAfter)
+        
+        let keepIds = Set(photos[startIdx...endIdx].map { $0.localIdentifier })
+        
+        // Remove images outside the window to free memory
+        preloadedImages = preloadedImages.filter { keepIds.contains($0.key) }
         
         // Preload next 3 images
         for offset in 1...3 {
