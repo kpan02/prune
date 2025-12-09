@@ -3,28 +3,28 @@
 //  Prune
 //
 
-import SwiftUI
-import Photos
 import OSLog
+import Photos
+import SwiftUI
 
 struct TrashGridView: View {
     @ObservedObject var photoLibrary: PhotoLibraryManager
     @ObservedObject var decisionStore: PhotoDecisionStore
     let columns: [GridItem]
-    
+
     private static let logger = Logger(subsystem: "com.prune.app", category: "TrashView")
-    
+
     @State private var trashedPhotos: [PHAsset] = []
     @State private var totalStorage: Int64 = 0
     @State private var isLoading = true
     @State private var showEmptyTrashConfirmation = false
     @State private var showRestoreAllConfirmation = false
     @State private var selectedPhoto: PHAsset?
-    
+
     private var photoCount: Int {
         trashedPhotos.count
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
@@ -32,7 +32,7 @@ struct TrashGridView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Trash")
                         .font(.system(size: 28, weight: .semibold))
-                    
+
                     if !isLoading {
                         HStack(spacing: 8) {
                             Text("\(photoCount) \(photoCount == 1 ? "photo" : "photos")")
@@ -46,9 +46,9 @@ struct TrashGridView: View {
                         .foregroundStyle(.secondary)
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // Action buttons
                 if !trashedPhotos.isEmpty {
                     HStack(spacing: 12) {
@@ -58,7 +58,7 @@ struct TrashGridView: View {
                             Label("Restore All", systemImage: "arrow.uturn.backward")
                         }
                         .buttonStyle(.bordered)
-                        
+
                         Button {
                             showEmptyTrashConfirmation = true
                         } label: {
@@ -70,7 +70,7 @@ struct TrashGridView: View {
                 }
             }
             .padding(.bottom, 8)
-            
+
             // Content
             if isLoading {
                 ProgressView()
@@ -102,7 +102,7 @@ struct TrashGridView: View {
             loadTrashedPhotos()
         }
         .alert("Empty Trash", isPresented: $showEmptyTrashConfirmation) {
-            Button("Cancel", role: .cancel) { }
+            Button("Cancel", role: .cancel) {}
             Button("Delete All", role: .destructive) {
                 emptyTrash()
             }
@@ -110,7 +110,7 @@ struct TrashGridView: View {
             Text("Are you sure you want to permanently delete all \(photoCount) photos in trash? This action cannot be undone.")
         }
         .alert("Are you sure you want to restore all \(photoCount) photos from trash?", isPresented: $showRestoreAllConfirmation) {
-            Button("Cancel", role: .cancel) { }
+            Button("Cancel", role: .cancel) {}
             Button("Restore All", role: .destructive) {
                 restoreAll()
             }
@@ -133,10 +133,10 @@ struct TrashGridView: View {
             }
         }
     }
-    
+
     private func loadTrashedPhotos() {
         isLoading = true
-        
+
         // Validate and cleanup orphaned IDs before loading (async, non-blocking)
         Task {
             await decisionStore.validateAndCleanup()
@@ -147,7 +147,7 @@ struct TrashGridView: View {
             }
         }
     }
-    
+
     private func loadPhotosAfterValidation(trashedIDs: Set<String>) {
         guard !trashedIDs.isEmpty else {
             trashedPhotos = []
@@ -155,10 +155,10 @@ struct TrashGridView: View {
             isLoading = false
             return
         }
-        
+
         let result = photoLibrary.fetchPhotos(byIDs: trashedIDs)
         trashedPhotos = result.photos
-        
+
         // Calculate total storage
         var storage: Int64 = 0
         for asset in trashedPhotos {
@@ -167,7 +167,7 @@ struct TrashGridView: View {
             }
         }
         totalStorage = storage
-        
+
         // Clean up orphaned IDs from decision store
         if !result.orphanedIDs.isEmpty {
             // Remove orphaned IDs from the decision store
@@ -175,16 +175,16 @@ struct TrashGridView: View {
                 decisionStore.restore(orphanedID) // This removes it from both archived and trashed
             }
         }
-        
+
         isLoading = false
     }
-    
+
     private func restorePhoto(_ asset: PHAsset) {
         decisionStore.restore(asset.localIdentifier)
         // Reload to update the view immediately
         loadTrashedPhotos()
     }
-    
+
     private func restoreAll() {
         for asset in trashedPhotos {
             decisionStore.restore(asset.localIdentifier)
@@ -192,24 +192,24 @@ struct TrashGridView: View {
         // Reload to update the view immediately
         loadTrashedPhotos()
     }
-    
+
     private func emptyTrash() {
         // Calculate statistics BEFORE deletion (while assets still exist)
         let photosDeleted = trashedPhotos.count
         var storageFreed: Int64 = 0
-        
+
         // Sum up file sizes for all photos being deleted
         for asset in trashedPhotos {
             if let fileSize = photoLibrary.getFileSize(for: asset) {
                 storageFreed += fileSize
             }
         }
-        
+
         // Permanently delete all trashed photos
         let assetsToDelete = trashedPhotos
-        PHPhotoLibrary.shared().performChanges({
+        PHPhotoLibrary.shared().performChanges {
             PHAssetChangeRequest.deleteAssets(assetsToDelete as NSArray)
-        }, completionHandler: { success, error in
+        } completionHandler: { success, error in
             if success {
                 // Update statistics in decision store after successful deletion
                 Task { @MainActor in
@@ -218,7 +218,7 @@ struct TrashGridView: View {
             } else if let error = error {
                 Self.logger.error("Error deleting photos: \(error.localizedDescription, privacy: .public)")
             }
-        })
+        }
     }
 }
 
@@ -228,10 +228,10 @@ struct TrashPhotoThumbnail: View {
     @ObservedObject var decisionStore: PhotoDecisionStore
     let onRestore: () -> Void
     let onSelect: () -> Void
-    
+
     @State private var thumbnail: NSImage?
     @State private var isHovered = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
@@ -261,7 +261,7 @@ struct TrashPhotoThumbnail: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.red.opacity(isHovered ? 0.1 : 0.05))
                 )
-                
+
                 // Trash badge
                 Image(systemName: "trash.fill")
                     .font(.system(size: 12))
@@ -272,7 +272,7 @@ struct TrashPhotoThumbnail: View {
                             .fill(Color.red)
                     )
                     .padding(8)
-                
+
                 // Restore button on hover
                 if isHovered {
                     VStack {
@@ -310,7 +310,7 @@ struct TrashPhotoThumbnail: View {
             loadThumbnail()
         }
     }
-    
+
     private func loadThumbnail() {
         guard thumbnail == nil else { return }
         photoLibrary.loadThumbnail(for: asset, size: CGSize(width: 320, height: 320)) { image in
@@ -327,11 +327,11 @@ struct EmptyTrashView: View {
             Image(systemName: "trash")
                 .font(.system(size: 56))
                 .foregroundStyle(.secondary.opacity(0.6))
-            
+
             Text("Trash is empty")
                 .font(.title2)
                 .fontWeight(.semibold)
-            
+
             Text("Photos you delete will appear here")
                 .font(.body)
                 .foregroundStyle(.secondary)
@@ -340,4 +340,3 @@ struct EmptyTrashView: View {
         .frame(maxWidth: .infinity, minHeight: 300)
     }
 }
-

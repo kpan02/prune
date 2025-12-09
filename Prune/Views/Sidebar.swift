@@ -8,12 +8,12 @@ import SwiftUI
 struct Sidebar: View {
     @Binding var selectedTab: SidebarTab
     @ObservedObject var decisionStore: PhotoDecisionStore
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Guide Section
             SidebarSectionHeader(title: "Guide")
-            
+
             VStack(spacing: 2) {
                 ForEach(SidebarTab.guideTabs, id: \.self) { tab in
                     SidebarItem(tab: tab, isSelected: selectedTab == tab) {
@@ -22,11 +22,11 @@ struct Sidebar: View {
                 }
             }
             .padding(.horizontal, 10)
-            
+
             // Library Section
             SidebarSectionHeader(title: "Library")
                 .padding(.top, 20)
-            
+
             VStack(spacing: 2) {
                 ForEach(SidebarTab.libraryTabs, id: \.self) { tab in
                     SidebarItem(tab: tab, isSelected: selectedTab == tab) {
@@ -35,11 +35,11 @@ struct Sidebar: View {
                 }
             }
             .padding(.horizontal, 10)
-            
+
             // Utilities Section
             SidebarSectionHeader(title: "Utilities")
                 .padding(.top, 20)
-            
+
             VStack(spacing: 2) {
                 ForEach(SidebarTab.utilityTabs, id: \.self) { tab in
                     SidebarItem(
@@ -52,9 +52,8 @@ struct Sidebar: View {
                 }
             }
             .padding(.horizontal, 10)
-            
+
             Spacer()
-            
         }
         .padding(.top, 12)
         .frame(width: 180)
@@ -64,7 +63,7 @@ struct Sidebar: View {
 
 struct SidebarSectionHeader: View {
     let title: String
-    
+
     var body: some View {
         Text(title)
             .font(.system(size: 11, weight: .semibold))
@@ -82,7 +81,7 @@ struct SidebarItem: View {
     var showBadge: Bool = false
     let action: () -> Void
     @State private var isHovered = false
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
@@ -91,14 +90,14 @@ struct SidebarItem: View {
                         .font(.system(size: 14))
                         .frame(width: 20)
                 } else {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 14))
-                    .frame(width: 20)
+                    Image(systemName: tab.icon)
+                        .font(.system(size: 14))
+                        .frame(width: 20)
                 }
                 Text(tab.rawValue)
                     .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
                 Spacer()
-                
+
                 if showBadge {
                     Circle()
                         .fill(Color.red)
@@ -111,7 +110,7 @@ struct SidebarItem: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(
                         isSelected ? Color.accentColor.opacity(0.15) :
-                        isHovered ? Color.primary.opacity(0.06) : Color.clear
+                            isHovered ? Color.primary.opacity(0.06) : Color.clear
                     )
             )
             .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
@@ -124,4 +123,3 @@ struct SidebarItem: View {
         }
     }
 }
-

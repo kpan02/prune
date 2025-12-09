@@ -8,7 +8,7 @@ import SwiftUI
 struct EmptyStateView: View {
     let title: String
     let message: String
-    
+
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "photo.on.rectangle.angled")

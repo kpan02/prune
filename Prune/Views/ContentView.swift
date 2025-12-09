@@ -3,14 +3,14 @@
 //  Prune
 //
 
-import SwiftUI
 import Photos
+import SwiftUI
 
 struct ContentView: View {
     @StateObject private var photoLibrary = PhotoLibraryManager()
     @StateObject private var decisionStore = PhotoDecisionStore()
     @State private var selectedTab: SidebarTab = .help
-    
+
     var body: some View {
         NavigationStack {
             HStack(spacing: 0) {
@@ -18,13 +18,13 @@ struct ContentView: View {
                 Sidebar(selectedTab: $selectedTab, decisionStore: decisionStore)
                     .padding(.leading, 12)
                     .padding(.vertical, 12)
-                
+
                 // Main Content
                 Group {
                     switch photoLibrary.authorizationStatus {
                     case .authorized, .limited:
                         TabContentView(selectedTab: selectedTab, photoLibrary: photoLibrary, decisionStore: decisionStore)
-                        
+
                     case .denied, .restricted:
                         VStack(spacing: 20) {
                             Image(systemName: "xmark.circle.fill")
@@ -38,7 +38,7 @@ struct ContentView: View {
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(40)
-                        
+
                     case .notDetermined:
                         VStack(spacing: 20) {
                             Image(systemName: "photo.on.rectangle")
@@ -53,7 +53,7 @@ struct ContentView: View {
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(40)
-                        
+
                     @unknown default:
                         Text("Unknown status")
                     }
@@ -77,11 +77,11 @@ struct TabContentView: View {
     let selectedTab: SidebarTab
     @ObservedObject var photoLibrary: PhotoLibraryManager
     @ObservedObject var decisionStore: PhotoDecisionStore
-    
+
     private let columns = [
-        GridItem(.adaptive(minimum: 160), spacing: 20)
+        GridItem(.adaptive(minimum: 160), spacing: 20),
     ]
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -114,4 +114,3 @@ struct TabContentView: View {
 #Preview {
     ContentView()
 }
-

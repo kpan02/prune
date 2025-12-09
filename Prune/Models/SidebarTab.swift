@@ -15,7 +15,7 @@ enum SidebarTab: String, CaseIterable {
     case dashboard = "Dashboard"
     case archive = "Archive"
     case help = "Guide"
-    
+
     var icon: String {
         switch self {
         case .media: return "photo.on.rectangle"
@@ -27,7 +27,7 @@ enum SidebarTab: String, CaseIterable {
         case .help: return "checkmark.seal.fill"
         }
     }
-    
+
     var section: SidebarSection {
         switch self {
         case .help:
@@ -38,15 +38,15 @@ enum SidebarTab: String, CaseIterable {
             return .utilities
         }
     }
-    
+
     static var guideTabs: [SidebarTab] {
         allCases.filter { $0.section == .guide }
     }
-    
+
     static var libraryTabs: [SidebarTab] {
         allCases.filter { $0.section == .library }
     }
-    
+
     static var utilityTabs: [SidebarTab] {
         allCases.filter { $0.section == .utilities }
     }
@@ -57,4 +57,3 @@ enum SidebarSection: String {
     case library = "Library"
     case utilities = "Utilities"
 }
-

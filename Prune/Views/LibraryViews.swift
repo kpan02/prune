@@ -3,16 +3,16 @@
 //  Prune
 //
 
-import SwiftUI
 import Photos
+import SwiftUI
 
 struct MediaGridView: View {
     @ObservedObject var photoLibrary: PhotoLibraryManager
     @ObservedObject var decisionStore: PhotoDecisionStore
     let columns: [GridItem]
-    
+
     @State private var selectedAlbum: PHAssetCollection?
-    
+
     private var albumsWithUnreviewedPhotos: [PHAssetCollection] {
         photoLibrary.utilityAlbums.filter { album in
             let allPhotos = photoLibrary.fetchPhotos(in: album)
@@ -21,7 +21,7 @@ struct MediaGridView: View {
             }
         }
     }
-    
+
     var body: some View {
         if albumsWithUnreviewedPhotos.isEmpty {
             EmptyStateView(title: "All Done!", message: "You've reviewed all media albums")
@@ -32,12 +32,12 @@ struct MediaGridView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Media")
                             .font(.system(size: 28, weight: .semibold))
-                        
+
                         Text("\(albumsWithUnreviewedPhotos.count) albums")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     Spacer()
                 }
                 .padding(.bottom, 8)
@@ -69,10 +69,10 @@ struct AlbumsGridView: View {
     @ObservedObject var photoLibrary: PhotoLibraryManager
     @ObservedObject var decisionStore: PhotoDecisionStore
     let columns: [GridItem]
-    
+
     @State private var selectedAlbum: PHAssetCollection?
     @State private var hideReviewedAlbums: Bool = true
-    
+
     private var albumsWithUnreviewedPhotos: [PHAssetCollection] {
         photoLibrary.userAlbums.filter { album in
             let allPhotos = photoLibrary.fetchPhotos(in: album)
@@ -81,7 +81,7 @@ struct AlbumsGridView: View {
             }
         }
     }
-    
+
     private var albumsToShow: [PHAssetCollection] {
         if hideReviewedAlbums {
             return albumsWithUnreviewedPhotos
@@ -95,7 +95,7 @@ struct AlbumsGridView: View {
             }
         }
     }
-    
+
     var body: some View {
         if albumsToShow.isEmpty {
             EmptyStateView(title: "All Done!", message: "You've reviewed all your albums")
@@ -106,14 +106,14 @@ struct AlbumsGridView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Albums")
                             .font(.system(size: 28, weight: .semibold))
-                        
+
                         Text("\(albumsToShow.count) albums")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Toggle("Hide Reviewed Albums", isOn: $hideReviewedAlbums)
                         .toggleStyle(.checkbox)
                         .font(.system(size: 13))
@@ -147,10 +147,10 @@ struct MonthsGridView: View {
     @ObservedObject var photoLibrary: PhotoLibraryManager
     @ObservedObject var decisionStore: PhotoDecisionStore
     let columns: [GridItem]
-    
+
     @State private var selectedMonthAlbum: MonthAlbum?
     @State private var hideReviewedAlbums: Bool = true
-    
+
     private var albumsWithUnreviewedPhotos: [MonthAlbum] {
         photoLibrary.monthAlbums.filter { monthAlbum in
             monthAlbum.photos.contains { asset in
@@ -158,7 +158,7 @@ struct MonthsGridView: View {
             }
         }
     }
-    
+
     private var albumsToShow: [MonthAlbum] {
         if hideReviewedAlbums {
             return albumsWithUnreviewedPhotos
@@ -171,7 +171,7 @@ struct MonthsGridView: View {
             }
         }
     }
-    
+
     var body: some View {
         if albumsToShow.isEmpty {
             EmptyStateView(title: "All Done!", message: "You've reviewed all photos in your library")
@@ -182,14 +182,14 @@ struct MonthsGridView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Months")
                             .font(.system(size: 28, weight: .semibold))
-                        
+
                         Text("\(albumsToShow.count) albums")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Toggle("Hide Reviewed Albums", isOn: $hideReviewedAlbums)
                         .toggleStyle(.checkbox)
                         .font(.system(size: 13))
@@ -232,24 +232,24 @@ struct MonthAlbumThumbnail: View {
     @ObservedObject var decisionStore: PhotoDecisionStore
     @State private var coverImage: NSImage?
     @State private var isHovered = false
-    
+
     private var unreviewedCount: Int {
         monthAlbum.photos.filter { asset in
             !decisionStore.isReviewed(asset.localIdentifier)
         }.count
     }
-    
+
     private var isFullyReviewed: Bool {
         !monthAlbum.photos.isEmpty && monthAlbum.photos.allSatisfy { decisionStore.isArchived($0.localIdentifier) }
     }
-    
+
     private func unarchiveAlbum() {
         let archivedPhotos = monthAlbum.photos.filter { decisionStore.isArchived($0.localIdentifier) }
         for photo in archivedPhotos {
             decisionStore.restore(photo.localIdentifier)
         }
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Cover image
@@ -271,7 +271,7 @@ struct MonthAlbumThumbnail: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.gray.opacity(isFullyReviewed ? 0.6 : 0))
                 )
-                
+
                 // Unarchive button on hover for reviewed albums
                 if isHovered && isFullyReviewed {
                     Button {
@@ -291,13 +291,13 @@ struct MonthAlbumThumbnail: View {
                     .buttonStyle(.plain)
                 }
             }
-            
+
             // Month name
             Text(monthAlbum.title)
                 .font(.headline)
                 .lineLimit(1)
                 .padding(.bottom, 0)
-            
+
             // Photo count (unreviewed)
             Text("\(unreviewedCount) photos")
                 .font(.caption)
@@ -318,7 +318,7 @@ struct MonthAlbumThumbnail: View {
             loadCoverImage()
         }
     }
-    
+
     private func loadCoverImage() {
         guard let coverAsset = monthAlbum.coverPhoto else { return }
         photoLibrary.loadThumbnail(for: coverAsset, size: CGSize(width: 320, height: 320)) { image in
@@ -335,28 +335,28 @@ struct AlbumThumbnail: View {
     @ObservedObject var decisionStore: PhotoDecisionStore
     @State private var coverImage: NSImage?
     @State private var isHovered = false
-    
+
     private var allPhotos: [PHAsset] {
         photoLibrary.fetchPhotos(in: album)
     }
-    
+
     private var unreviewedCount: Int {
         allPhotos.filter { asset in
             !decisionStore.isReviewed(asset.localIdentifier)
         }.count
     }
-    
+
     private var isFullyReviewed: Bool {
         !allPhotos.isEmpty && allPhotos.allSatisfy { decisionStore.isArchived($0.localIdentifier) }
     }
-    
+
     private func unarchiveAlbum() {
         let archivedPhotos = allPhotos.filter { decisionStore.isArchived($0.localIdentifier) }
         for photo in archivedPhotos {
             decisionStore.restore(photo.localIdentifier)
         }
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Cover image
@@ -378,7 +378,7 @@ struct AlbumThumbnail: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.gray.opacity(isFullyReviewed ? 0.6 : 0))
                 )
-                
+
                 // Unarchive button on hover for reviewed albums
                 if isHovered && isFullyReviewed {
                     Button {
@@ -398,13 +398,13 @@ struct AlbumThumbnail: View {
                     .buttonStyle(.plain)
                 }
             }
-            
+
             // Album name
             Text(album.localizedTitle ?? "Untitled")
                 .font(.headline)
                 .lineLimit(1)
                 .padding(.bottom, 0)
-            
+
             // Photo count (unreviewed)
             Text("\(unreviewedCount) photos")
                 .font(.caption)
@@ -425,7 +425,7 @@ struct AlbumThumbnail: View {
             loadCoverImage()
         }
     }
-    
+
     private func loadCoverImage() {
         guard let coverAsset = photoLibrary.getCoverPhoto(for: album) else { return }
         photoLibrary.loadThumbnail(for: coverAsset, size: CGSize(width: 320, height: 320)) { image in
@@ -435,4 +435,3 @@ struct AlbumThumbnail: View {
         }
     }
 }
-

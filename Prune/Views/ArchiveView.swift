@@ -3,28 +3,28 @@
 //  Prune
 //
 
-import SwiftUI
 import Photos
+import SwiftUI
 
 struct ArchiveGridView: View {
     @ObservedObject var photoLibrary: PhotoLibraryManager
     @ObservedObject var decisionStore: PhotoDecisionStore
     let columns: [GridItem]
-    
+
     @State private var archivedPhotos: [PHAsset] = []
     @State private var isCalculatingStorage = false
     @State private var isLoading = true
     @State private var showRestoreAllConfirmation = false
     @State private var selectedPhoto: PHAsset?
-    
+
     private var photoCount: Int {
         archivedPhotos.count
     }
-    
+
     private var totalStorage: Int64 {
         decisionStore.totalArchivedStorage
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
@@ -32,7 +32,7 @@ struct ArchiveGridView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Archive")
                         .font(.system(size: 28, weight: .semibold))
-                    
+
                     if !isLoading {
                         HStack(spacing: 8) {
                             Text("\(photoCount) \(photoCount == 1 ? "photo" : "photos")")
@@ -41,7 +41,7 @@ struct ArchiveGridView: View {
                                     .foregroundStyle(.secondary.opacity(0.5))
                                 Text("Calculating...")
                                     .foregroundStyle(.secondary.opacity(0.7))
-                            } else                             if totalStorage > 0 {
+                            } else if totalStorage > 0 {
                                 Text("•")
                                     .foregroundStyle(.secondary.opacity(0.5))
                                 Text(ByteCountFormatter.formatFileSize(totalStorage))
@@ -51,9 +51,9 @@ struct ArchiveGridView: View {
                         .foregroundStyle(.secondary)
                     }
                 }
-                
+
                 Spacer()
-                
+
                 // Action button
                 if !archivedPhotos.isEmpty {
                     Button {
@@ -65,7 +65,7 @@ struct ArchiveGridView: View {
                 }
             }
             .padding(.bottom, 8)
-            
+
             // Content
             if isLoading {
                 ProgressView()
@@ -97,7 +97,7 @@ struct ArchiveGridView: View {
             loadArchivedPhotos()
         }
         .alert("Are you sure you want to restore all \(photoCount) photos from archive?", isPresented: $showRestoreAllConfirmation) {
-            Button("Cancel", role: .cancel) { }
+            Button("Cancel", role: .cancel) {}
             Button("Restore All", role: .destructive) {
                 restoreAll()
             }
@@ -120,10 +120,10 @@ struct ArchiveGridView: View {
             }
         }
     }
-    
+
     private func loadArchivedPhotos() {
         isLoading = true
-        
+
         // Validate and cleanup orphaned IDs before loading (async, non-blocking)
         Task {
             await decisionStore.validateAndCleanup()
@@ -134,17 +134,17 @@ struct ArchiveGridView: View {
             }
         }
     }
-    
+
     private func loadPhotosAfterValidation(archivedIDs: Set<String>) {
         guard !archivedIDs.isEmpty else {
             archivedPhotos = []
             isLoading = false
             return
         }
-        
+
         let result = photoLibrary.fetchPhotos(byIDs: archivedIDs)
         archivedPhotos = result.photos
-        
+
         // Clean up orphaned IDs from decision store
         if !result.orphanedIDs.isEmpty {
             // Remove orphaned IDs from the decision store
@@ -152,30 +152,30 @@ struct ArchiveGridView: View {
                 decisionStore.restore(orphanedID) // This removes it from both archived and trashed
             }
         }
-        
+
         isLoading = false
-        
+
         // Calculate storage async if cache is missing or invalid
-        if decisionStore.totalArchivedStorage == 0 && !archivedPhotos.isEmpty {
+        if decisionStore.totalArchivedStorage == 0, !archivedPhotos.isEmpty {
             calculateStorageAsync()
         }
     }
-    
+
     private func calculateStorageAsync() {
         guard !archivedPhotos.isEmpty else { return }
-        
+
         isCalculatingStorage = true
-        
+
         // Calculate storage on background thread
         Task.detached(priority: .userInitiated) { [archivedPhotos] in
             var storage: Int64 = 0
-            
+
             // Calculate storage for all photos
             for asset in archivedPhotos {
                 let resources = PHAssetResource.assetResources(for: asset)
                 guard let resource = resources.first,
                       let fileSizeValue = resource.value(forKey: "fileSize") else { continue }
-                
+
                 // Try multiple type conversions for fileSize (can be NSNumber, Int, Int64, etc.)
                 if let number = fileSizeValue as? NSNumber {
                     storage += number.int64Value
@@ -187,10 +187,10 @@ struct ArchiveGridView: View {
                     storage += Int64(uint64Value)
                 }
             }
-            
+
             // Capture the final value before MainActor.run
             let finalStorage = storage
-            
+
             // Update on main thread
             await MainActor.run {
                 decisionStore.updateArchivedStorage(finalStorage)
@@ -198,13 +198,13 @@ struct ArchiveGridView: View {
             }
         }
     }
-    
+
     private func restorePhoto(_ asset: PHAsset) {
         decisionStore.restore(asset.localIdentifier)
         // Reload to update the view immediately
         loadArchivedPhotos()
     }
-    
+
     private func restoreAll() {
         for asset in archivedPhotos {
             decisionStore.restore(asset.localIdentifier)
@@ -212,7 +212,6 @@ struct ArchiveGridView: View {
         // Reload to update the view immediately
         loadArchivedPhotos()
     }
-    
 }
 
 struct ArchivePhotoThumbnail: View {
@@ -221,10 +220,10 @@ struct ArchivePhotoThumbnail: View {
     @ObservedObject var decisionStore: PhotoDecisionStore
     let onRestore: () -> Void
     let onSelect: () -> Void
-    
+
     @State private var thumbnail: NSImage?
     @State private var isHovered = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .topTrailing) {
@@ -254,7 +253,7 @@ struct ArchivePhotoThumbnail: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.green.opacity(isHovered ? 0.1 : 0.05))
                 )
-                
+
                 // Archive badge (checkmark)
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 12))
@@ -265,7 +264,7 @@ struct ArchivePhotoThumbnail: View {
                             .fill(Color.green)
                     )
                     .padding(8)
-                
+
                 // Restore button on hover
                 if isHovered {
                     VStack {
@@ -303,7 +302,7 @@ struct ArchivePhotoThumbnail: View {
             loadThumbnail()
         }
     }
-    
+
     private func loadThumbnail() {
         guard thumbnail == nil else { return }
         photoLibrary.loadThumbnail(for: asset, size: CGSize(width: 320, height: 320)) { image in
@@ -320,11 +319,11 @@ struct EmptyArchiveView: View {
             Image(systemName: "archivebox")
                 .font(.system(size: 56))
                 .foregroundStyle(.secondary.opacity(0.6))
-            
+
             Text("Archive is empty")
                 .font(.title2)
                 .fontWeight(.semibold)
-            
+
             Text("Photos you keep will appear here")
                 .font(.body)
                 .foregroundStyle(.secondary)
@@ -333,4 +332,3 @@ struct EmptyArchiveView: View {
         .frame(maxWidth: .infinity, minHeight: 300)
     }
 }
-

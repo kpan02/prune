@@ -15,4 +15,3 @@ extension ByteCountFormatter {
         return formatter.string(fromByteCount: bytes)
     }
 }
-

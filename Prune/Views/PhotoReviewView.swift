@@ -5,21 +5,21 @@
 //  Photo review interface with filmstrip navigation and flexible reviewing.
 //
 
-import SwiftUI
-import Photos
 import AppKit
 import OSLog
+import Photos
+import SwiftUI
 
 struct PhotoReviewView: View {
     let albumTitle: String
     @ObservedObject var photoLibrary: PhotoLibraryManager
     @ObservedObject var decisionStore: PhotoDecisionStore
-    
+
     // All photos in the album (not pre-filtered)
     @State private var allPhotos: [PHAsset]
-    
+
     private static let logger = Logger(subsystem: "com.prune.app", category: "PhotoReviewView")
-    
+
     @Environment(\.dismiss) private var dismiss
     // Track current photo by ID instead of index for stability
     @State private var currentPhotoId: String?
@@ -30,18 +30,18 @@ struct PhotoReviewView: View {
     @State private var metadata: PhotoMetadata?
     @State private var isBackHovered = false
     @State private var feedback: ReviewFeedback?
-    @State private var hideReviewed = false  // Default: show all photos
+    @State private var hideReviewed = false // Default: show all photos
     @State private var thumbnailCache: [String: NSImage] = [:]
     @State private var preloadedImages: [String: NSImage] = [:]
-    @State private var refreshTrigger = UUID()  
-    
+    @State private var refreshTrigger = UUID()
+
     init(albumTitle: String, photos: [PHAsset], photoLibrary: PhotoLibraryManager, decisionStore: PhotoDecisionStore) {
         self.albumTitle = albumTitle
         _allPhotos = State(initialValue: photos)
         self.photoLibrary = photoLibrary
         self.decisionStore = decisionStore
     }
-    
+
     // Photos to display based on toggle
     private var displayedPhotos: [PHAsset] {
         if hideReviewed {
@@ -50,18 +50,18 @@ struct PhotoReviewView: View {
             return allPhotos
         }
     }
-    
+
     // Current index derived from photo ID
     private var currentIndex: Int {
         guard let photoId = currentPhotoId else { return 0 }
         return displayedPhotos.firstIndex(where: { $0.localIdentifier == photoId }) ?? 0
     }
-    
+
     private var currentAsset: PHAsset? {
         guard let photoId = currentPhotoId else { return displayedPhotos.first }
         return displayedPhotos.first(where: { $0.localIdentifier == photoId })
     }
-    
+
     private var progressText: String {
         let total = displayedPhotos.count
         let position = total > 0 ? currentIndex + 1 : 0
@@ -71,7 +71,7 @@ struct PhotoReviewView: View {
             return "\(position) / \(total)"
         }
     }
-    
+
     // Current photo's decision status
     private var currentDecisionStatus: DecisionStatus? {
         guard let asset = currentAsset else { return nil }
@@ -82,24 +82,24 @@ struct PhotoReviewView: View {
         }
         return nil
     }
-    
+
     // Current photo's favorite status
     private var isCurrentPhotoFavorited: Bool {
-        _ = refreshTrigger  // Use refresh trigger to force recomputation
+        _ = refreshTrigger // Use refresh trigger to force recomputation
         return currentAsset?.isFavorite ?? false
     }
-    
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
                 // Top bar
                 topBar
-                
+
                 // Metadata bar
                 if let metadata = metadata, !isCompleted {
                     metadataBar(metadata: metadata)
                 }
-                
+
                 // Photo area
                 if isCompleted || displayedPhotos.isEmpty {
                     CompletionView(photoCount: allPhotos.count, reviewedCount: allPhotos.count - displayedPhotos.count) {
@@ -108,20 +108,20 @@ struct PhotoReviewView: View {
                 } else {
                     photoArea
                         .padding(.bottom, 15)
-                    
+
                     Divider()
                         .padding(.top, 5)
-                    
+
                     filmstrip
-                    
+
                     Divider()
                         .padding(.bottom, 5)
-                    
+
                     controlsBar
                         .padding(.bottom, 5)
                 }
             }
-            
+
             // Feedback toast
             if let feedback = feedback {
                 feedbackToast(feedback: feedback)
@@ -135,7 +135,7 @@ struct PhotoReviewView: View {
             loadCurrentImage()
             loadMetadata()
         }
-        .onChange(of: currentPhotoId) { 
+        .onChange(of: currentPhotoId) {
             loadCurrentImage()
             loadMetadata()
         }
@@ -143,9 +143,9 @@ struct PhotoReviewView: View {
             handleToggleChange(wasHiding: oldValue, nowHiding: newValue)
         }
     }
-    
+
     // MARK: - Initialization
-    
+
     private func initializeCurrentPhoto() {
         // Start at first unreviewed photo
         if let firstUnreviewed = allPhotos.first(where: { !decisionStore.isReviewed($0.localIdentifier) }) {
@@ -154,9 +154,9 @@ struct PhotoReviewView: View {
             currentPhotoId = first.localIdentifier
         }
     }
-    
+
     // MARK: - View Components
-    
+
     private var topBar: some View {
         // Back button
         HStack {
@@ -178,7 +178,7 @@ struct PhotoReviewView: View {
                     isBackHovered = hovering
                 }
             }
-            
+
             Spacer()
         }
 
@@ -188,7 +188,7 @@ struct PhotoReviewView: View {
                 .font(.system(size: 24, weight: .semibold))
         )
 
-        // Progress text 
+        // Progress text
         .overlay(alignment: .trailing) {
             Text(progressText)
                 .font(.subheadline)
@@ -198,11 +198,11 @@ struct PhotoReviewView: View {
         .padding(.horizontal, 12)
         .padding(.top, 8)
     }
-    
+
     private func metadataBar(metadata: PhotoMetadata) -> some View {
         HStack(spacing: 20) {
             Spacer()
-            
+
             // Decision status badge
             if let status = currentDecisionStatus {
                 HStack(spacing: 5) {
@@ -219,7 +219,7 @@ struct PhotoReviewView: View {
                 )
                 .foregroundStyle(status == .kept ? .green : .red)
             }
-            
+
             // Favorite badge
             if let asset = currentAsset, asset.isFavorite {
                 HStack(spacing: 5) {
@@ -236,7 +236,7 @@ struct PhotoReviewView: View {
                 )
                 .foregroundStyle(.yellow)
             }
-            
+
             // Date
             HStack(spacing: 5) {
                 Image(systemName: "calendar")
@@ -244,7 +244,7 @@ struct PhotoReviewView: View {
                 Text(metadata.formattedDate)
                     .font(.caption)
             }
-            
+
             // File size
             if let size = metadata.formattedSize {
                 HStack(spacing: 5) {
@@ -262,12 +262,12 @@ struct PhotoReviewView: View {
         .background(Color.white)
         .foregroundStyle(.secondary)
     }
-    
+
     private var photoArea: some View {
         GeometryReader { proxy in
             ZStack {
                 Color.white
-                
+
                 if imageLoadFailed {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle")
@@ -290,7 +290,7 @@ struct PhotoReviewView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(maxWidth: proxy.size.width, maxHeight: proxy.size.height)
-                        
+
                         // Overlay indicators on the photo itself
                         if let asset = currentAsset {
                             GeometryReader { imageProxy in
@@ -301,7 +301,7 @@ struct PhotoReviewView: View {
                                 let scaledHeight = imageSize.height * scale
                                 let xOffset = (containerSize.width - scaledWidth) / 2
                                 let yOffset = (containerSize.height - scaledHeight) / 2
-                                
+
                                 // Favorite indicator (top-right)
                                 if asset.isFavorite {
                                     Image(systemName: "star.fill")
@@ -318,7 +318,7 @@ struct PhotoReviewView: View {
                                             y: yOffset + 25
                                         )
                                 }
-                                
+
                                 // Reviewed indicator (top-left)
                                 if decisionStore.isReviewed(asset.localIdentifier) {
                                     let isKept = decisionStore.isArchived(asset.localIdentifier)
@@ -347,7 +347,7 @@ struct PhotoReviewView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
-    
+
     private var filmstrip: some View {
         ScrollViewReader { scrollProxy in
             ScrollView(.horizontal, showsIndicators: false) {
@@ -391,7 +391,7 @@ struct PhotoReviewView: View {
             }
         }
     }
-    
+
     private var controlsBar: some View {
         ZStack {
             // Navigation and decision buttons - centered
@@ -410,7 +410,7 @@ struct PhotoReviewView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.large)
                     .keyboardShortcut(.leftArrow, modifiers: [])
-                    
+
                     // Keep and Delete Buttons
                     VStack(spacing: 8) {
                         Button {
@@ -423,7 +423,7 @@ struct PhotoReviewView: View {
                         .tint(.green)
                         .controlSize(.large)
                         .keyboardShortcut(.upArrow, modifiers: [])
-                        
+
                         Button {
                             handleDelete()
                         } label: {
@@ -435,7 +435,7 @@ struct PhotoReviewView: View {
                         .controlSize(.large)
                         .keyboardShortcut(.downArrow, modifiers: [])
                     }
-                    
+
                     // Navigation: Next Button
                     Button {
                         goToNext()
@@ -450,14 +450,14 @@ struct PhotoReviewView: View {
                     .controlSize(.large)
                     .keyboardShortcut(.rightArrow, modifiers: [])
                 }
-                
+
                 // Footer text
                 Text("(use arrow keys)")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.top, 2)
             }
-            
+
             // Favorite and Clear Decision buttons - bottom left
             HStack(spacing: 8) {
                 // Favorite button - always visible
@@ -488,7 +488,7 @@ struct PhotoReviewView: View {
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut("f", modifiers: [])
-                
+
                 // Clear Decision button - only visible when photo is reviewed
                 if currentDecisionStatus != nil {
                     Button {
@@ -502,7 +502,7 @@ struct PhotoReviewView: View {
                                 Text("        [space]")
                                     .font(.system(size: 11, weight: .regular))
                                     .foregroundStyle(.white)
-                                                               }
+                            }
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
@@ -523,7 +523,7 @@ struct PhotoReviewView: View {
             }
             .padding(.leading, 12)
             .padding(.bottom, 8)
-            
+
             // Hide reviewed toggle - bottom right
             HStack {
                 Spacer()
@@ -540,11 +540,11 @@ struct PhotoReviewView: View {
         .padding(.bottom, 6)
         .background(Color.white)
     }
-    
+
     private func feedbackToast(feedback: ReviewFeedback) -> some View {
         VStack {
             let config = feedbackConfig(for: feedback)
-            
+
             HStack(spacing: 6) {
                 Image(systemName: config.icon)
                     .font(.system(size: 13, weight: .semibold))
@@ -559,15 +559,15 @@ struct PhotoReviewView: View {
             )
             .foregroundStyle(Color.white)
             .shadow(color: config.shadow, radius: 8, x: 0, y: 4)
-            
+
             Spacer()
         }
         .padding(.top, 60)
         .transition(.move(edge: .top).combined(with: .opacity))
     }
-    
+
     // MARK: - Actions
-    
+
     private func handleAccept() {
         guard let asset = currentAsset else { return }
         let photoId = asset.localIdentifier
@@ -575,7 +575,7 @@ struct PhotoReviewView: View {
         showFeedback(.kept)
         advanceAfterDecision(from: photoId)
     }
-    
+
     private func handleDelete() {
         guard let asset = currentAsset else { return }
         let photoId = asset.localIdentifier
@@ -583,7 +583,7 @@ struct PhotoReviewView: View {
         showFeedback(.deleted)
         advanceAfterDecision(from: photoId)
     }
-    
+
     private func handleClearDecision() {
         guard let asset = currentAsset else { return }
         // Only clear if photo is currently reviewed
@@ -591,7 +591,7 @@ struct PhotoReviewView: View {
         decisionStore.restore(asset.localIdentifier)
         showFeedback(.cleared)
     }
-    
+
     private func handleToggleFavorite() {
         guard let asset = currentAsset, let photoId = currentPhotoId else { return }
         photoLibrary.toggleFavorite(for: asset) { success in
@@ -611,7 +611,7 @@ struct PhotoReviewView: View {
             }
         }
     }
-    
+
     private func goToNext() {
         let idx = currentIndex
         if idx < displayedPhotos.count - 1 {
@@ -620,26 +620,26 @@ struct PhotoReviewView: View {
             isCompleted = true
         }
     }
-    
+
     private func goToPrevious() {
         let idx = currentIndex
         if idx > 0 {
             currentPhotoId = displayedPhotos[idx - 1].localIdentifier
         }
     }
-    
+
     private func advanceAfterDecision(from photoId: String) {
         if hideReviewed {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
                 if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
-                    for i in (originalIndex + 1)..<allPhotos.count {
+                    for i in (originalIndex + 1) ..< allPhotos.count {
                         if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
                             currentPhotoId = allPhotos[i].localIdentifier
                             return
                         }
                     }
-                    for i in 0..<originalIndex {
+                    for i in 0 ..< originalIndex {
                         if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
                             currentPhotoId = allPhotos[i].localIdentifier
                             return
@@ -655,21 +655,21 @@ struct PhotoReviewView: View {
             goToNext()
         }
     }
-    
-    private func handleToggleChange(wasHiding: Bool, nowHiding: Bool) {
+
+    private func handleToggleChange(wasHiding _: Bool, nowHiding _: Bool) {
         guard let photoId = currentPhotoId else {
             if let first = displayedPhotos.first {
                 currentPhotoId = first.localIdentifier
             }
             return
         }
-        
+
         if displayedPhotos.contains(where: { $0.localIdentifier == photoId }) {
             return
         }
-        
+
         if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
-            for i in originalIndex..<allPhotos.count {
+            for i in originalIndex ..< allPhotos.count {
                 if displayedPhotos.contains(where: { $0.localIdentifier == allPhotos[i].localIdentifier }) {
                     currentPhotoId = allPhotos[i].localIdentifier
                     return
@@ -682,7 +682,7 @@ struct PhotoReviewView: View {
                 }
             }
         }
-        
+
         // Fallback to first in list
         if let first = displayedPhotos.first {
             currentPhotoId = first.localIdentifier
@@ -695,7 +695,7 @@ struct PhotoReviewView: View {
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             feedback = type
         }
-        
+
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 650_000_000) // 0.65 seconds
             withAnimation(.easeOut(duration: 0.18)) {
@@ -705,13 +705,13 @@ struct PhotoReviewView: View {
             }
         }
     }
-    
+
     // MARK: - Image Loading
-    
+
     private func loadCurrentImage() {
         guard let asset = currentAsset else { return }
         let assetId = asset.localIdentifier
-        
+
         // Check if already preloaded
         if let preloaded = preloadedImages[assetId] {
             currentImage = preloaded
@@ -720,11 +720,11 @@ struct PhotoReviewView: View {
             preloadNextImages()
             return
         }
-        
+
         currentImage = nil
         imageLoadFailed = false
         isLoading = true
-        
+
         // Add timeout to prevent indefinite loading
         let timeoutTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
@@ -734,14 +734,14 @@ struct PhotoReviewView: View {
                 isLoading = false
             }
         }
-        
+
         photoLibrary.loadHighQualityImage(for: asset) { image in
             Task { @MainActor in
                 timeoutTask.cancel()
                 guard self.currentPhotoId == assetId else { return }
-                
+
                 self.isLoading = false
-                
+
                 if let image = image {
                     self.currentImage = image
                     // Also cache the current image so we can navigate back to it quickly
@@ -755,37 +755,37 @@ struct PhotoReviewView: View {
             }
         }
     }
-    
+
     private func preloadNextImages() {
         let photos = displayedPhotos
         guard let currentIdx = photos.firstIndex(where: { $0.localIdentifier == currentPhotoId }) else { return }
-        
+
         // Clean up full-quality image cache: keep a sliding window around current position
         // Keep 5 images before current, current image, and 10 images after (16 total)
         let keepBefore = 5
         let keepAfter = 10
         let startIdx = max(0, currentIdx - keepBefore)
         let endIdx = min(photos.count - 1, currentIdx + keepAfter)
-        
-        let keepIds = Set(photos[startIdx...endIdx].map { $0.localIdentifier })
-        
+
+        let keepIds = Set(photos[startIdx ... endIdx].map { $0.localIdentifier })
+
         // Remove images outside the window to free memory
         preloadedImages = preloadedImages.filter { keepIds.contains($0.key) }
-        
+
         // Also clean up thumbnail cache with a larger window (thumbnails are smaller)
         cleanupThumbnailCache(aroundIndex: currentIdx, in: photos)
-        
+
         // Preload next 3 images
-        for offset in 1...3 {
+        for offset in 1 ... 3 {
             let nextIdx = currentIdx + offset
             guard nextIdx < photos.count else { break }
-            
+
             let nextAsset = photos[nextIdx]
             let nextId = nextAsset.localIdentifier
-            
+
             // Skip if already preloaded
             guard preloadedImages[nextId] == nil else { continue }
-            
+
             photoLibrary.loadHighQualityImage(for: nextAsset) { image in
                 Task { @MainActor in
                     if let image = image {
@@ -795,23 +795,23 @@ struct PhotoReviewView: View {
             }
         }
     }
-    
+
     private func cleanupThumbnailCache(aroundIndex: Int, in photos: [PHAsset]) {
         // Keep a larger window for thumbnails since they're smaller (100 before, 100 after)
         let thumbnailWindowBefore = 100
         let thumbnailWindowAfter = 100
         let startIdx = max(0, aroundIndex - thumbnailWindowBefore)
         let endIdx = min(photos.count - 1, aroundIndex + thumbnailWindowAfter)
-        
-        let keepThumbnailIds = Set(photos[startIdx...endIdx].map { $0.localIdentifier })
-        
+
+        let keepThumbnailIds = Set(photos[startIdx ... endIdx].map { $0.localIdentifier })
+
         // Remove thumbnails outside the window to free memory
         thumbnailCache = thumbnailCache.filter { keepThumbnailIds.contains($0.key) }
     }
-    
+
     private func loadThumbnail(for asset: PHAsset) {
         guard thumbnailCache[asset.localIdentifier] == nil else { return }
-        
+
         photoLibrary.loadThumbnail(for: asset, size: CGSize(width: 120, height: 120)) { image in
             Task { @MainActor in
                 if let image = image {
@@ -820,27 +820,27 @@ struct PhotoReviewView: View {
             }
         }
     }
-    
+
     private func loadMetadata() {
         guard let asset = currentAsset else {
             metadata = nil
             return
         }
-        
+
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
         dateFormatter.timeStyle = .short
         let dateString = asset.creationDate.map { dateFormatter.string(from: $0) } ?? "Unknown"
-        
+
         let fileSize = photoLibrary.getFileSize(for: asset)
         let sizeString = fileSize.map { ByteCountFormatter.formatFileSize($0) }
-        
+
         metadata = PhotoMetadata(
             formattedDate: dateString,
             formattedSize: sizeString
         )
     }
-    
+
     private func getDecisionStatus(for asset: PHAsset) -> DecisionStatus? {
         if decisionStore.isArchived(asset.localIdentifier) {
             return .kept
@@ -910,7 +910,7 @@ struct FilmstripThumbnail: View {
     let decisionStatus: DecisionStatus?
     let thumbnail: NSImage?
     @State private var isHovered = false
-    
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             // Thumbnail image
@@ -936,7 +936,7 @@ struct FilmstripThumbnail: View {
             )
             .scaleEffect(isSelected ? 1.1 : 1.0)
             .animation(.easeInOut(duration: 0.15), value: isSelected)
-            
+
             // Favorite indicator (top-left)
             if asset.isFavorite {
                 Image(systemName: "star.fill")
@@ -945,7 +945,7 @@ struct FilmstripThumbnail: View {
                     .offset(x: -4, y: -4)
                     .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
             }
-            
+
             // Decision indicator (top-right)
             if let status = decisionStatus {
                 Circle()
@@ -968,7 +968,7 @@ struct FilmstripThumbnail: View {
             }
         }
     }
-    
+
     private var borderColor: Color {
         if isSelected {
             return .accentColor
@@ -987,21 +987,21 @@ struct CompletionView: View {
     let photoCount: Int
     let reviewedCount: Int
     let onDismiss: () -> Void
-    
+
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 60))
                 .foregroundStyle(.green)
-            
+
             Text("Review Complete!")
                 .font(.title)
                 .fontWeight(.bold)
-            
+
             Text("You've reviewed all \(photoCount) photos in this album")
                 .font(.body)
                 .foregroundStyle(.secondary)
-            
+
             Button("Back to Albums") {
                 onDismiss()
             }
@@ -1011,4 +1011,3 @@ struct CompletionView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
-

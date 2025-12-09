@@ -9,7 +9,7 @@ import SwiftUI
 
 extension View {
     func cardBackground() -> some View {
-        self.background(
+        background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(hex: 0xF2F7FD))
                 .overlay(
@@ -19,4 +19,3 @@ extension View {
         )
     }
 }
-
