@@ -16,7 +16,7 @@ struct PhotoReviewView: View {
     @ObservedObject var decisionStore: PhotoDecisionStore
     
     // All photos in the album (not pre-filtered)
-    private let allPhotos: [PHAsset]
+    @State private var allPhotos: [PHAsset]
     
     private static let logger = Logger(subsystem: "com.prune.app", category: "PhotoReviewView")
     
@@ -37,7 +37,7 @@ struct PhotoReviewView: View {
     
     init(albumTitle: String, photos: [PHAsset], photoLibrary: PhotoLibraryManager, decisionStore: PhotoDecisionStore) {
         self.albumTitle = albumTitle
-        self.allPhotos = photos
+        _allPhotos = State(initialValue: photos)
         self.photoLibrary = photoLibrary
         self.decisionStore = decisionStore
     }
@@ -597,8 +597,14 @@ struct PhotoReviewView: View {
         photoLibrary.toggleFavorite(for: asset) { success in
             if success {
                 Task { @MainActor in
+                    // Refetch the asset to get updated favorite status
                     let fetchOptions = PHFetchOptions()
-                    if PHAsset.fetchAssets(withLocalIdentifiers: [photoId], options: fetchOptions).firstObject != nil {
+                    if let updatedAsset = PHAsset.fetchAssets(withLocalIdentifiers: [photoId], options: fetchOptions).firstObject {
+                        // Update the asset in allPhotos array
+                        if let index = self.allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
+                            self.allPhotos[index] = updatedAsset
+                        }
+                        // Force view update
                         self.refreshTrigger = UUID()
                     }
                 }
