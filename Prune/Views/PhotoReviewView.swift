@@ -750,7 +750,7 @@ struct PhotoReviewView: View {
         let photos = displayedPhotos
         guard let currentIdx = photos.firstIndex(where: { $0.localIdentifier == currentPhotoId }) else { return }
         
-        // Clean up cache: keep a sliding window around current position
+        // Clean up full-quality image cache: keep a sliding window around current position
         // Keep 5 images before current, current image, and 10 images after (16 total)
         let keepBefore = 5
         let keepAfter = 10
@@ -761,6 +761,9 @@ struct PhotoReviewView: View {
         
         // Remove images outside the window to free memory
         preloadedImages = preloadedImages.filter { keepIds.contains($0.key) }
+        
+        // Also clean up thumbnail cache with a larger window (thumbnails are smaller)
+        cleanupThumbnailCache(aroundIndex: currentIdx, in: photos)
         
         // Preload next 3 images
         for offset in 1...3 {
@@ -781,6 +784,19 @@ struct PhotoReviewView: View {
                 }
             }
         }
+    }
+    
+    private func cleanupThumbnailCache(aroundIndex: Int, in photos: [PHAsset]) {
+        // Keep a larger window for thumbnails since they're smaller (100 before, 100 after)
+        let thumbnailWindowBefore = 100
+        let thumbnailWindowAfter = 100
+        let startIdx = max(0, aroundIndex - thumbnailWindowBefore)
+        let endIdx = min(photos.count - 1, aroundIndex + thumbnailWindowAfter)
+        
+        let keepThumbnailIds = Set(photos[startIdx...endIdx].map { $0.localIdentifier })
+        
+        // Remove thumbnails outside the window to free memory
+        thumbnailCache = thumbnailCache.filter { keepThumbnailIds.contains($0.key) }
     }
     
     private func loadThumbnail(for asset: PHAsset) {
