@@ -71,7 +71,7 @@ struct AlbumsGridView: View {
     let columns: [GridItem]
 
     @State private var selectedAlbum: PHAssetCollection?
-    @State private var hideReviewedAlbums: Bool = true
+    @State private var isHidingReviewedAlbums: Bool = true
 
     private var albumsWithUnreviewedPhotos: [PHAssetCollection] {
         photoLibrary.userAlbums.filter { album in
@@ -83,7 +83,7 @@ struct AlbumsGridView: View {
     }
 
     private var albumsToShow: [PHAssetCollection] {
-        if hideReviewedAlbums {
+        if isHidingReviewedAlbums {
             return albumsWithUnreviewedPhotos
         } else {
             return photoLibrary.userAlbums.filter { album in
@@ -114,7 +114,7 @@ struct AlbumsGridView: View {
 
                     Spacer()
 
-                    Toggle("Hide Reviewed Albums", isOn: $hideReviewedAlbums)
+                    Toggle("Hide Reviewed Albums", isOn: $isHidingReviewedAlbums)
                         .toggleStyle(.checkbox)
                         .font(.system(size: 13))
                 }
@@ -149,7 +149,7 @@ struct MonthsGridView: View {
     let columns: [GridItem]
 
     @State private var selectedMonthAlbum: MonthAlbum?
-    @State private var hideReviewedAlbums: Bool = true
+    @State private var isHidingReviewedAlbums: Bool = true
 
     private var albumsWithUnreviewedPhotos: [MonthAlbum] {
         photoLibrary.monthAlbums.filter { monthAlbum in
@@ -160,7 +160,7 @@ struct MonthsGridView: View {
     }
 
     private var albumsToShow: [MonthAlbum] {
-        if hideReviewedAlbums {
+        if isHidingReviewedAlbums {
             return albumsWithUnreviewedPhotos
         } else {
             return photoLibrary.monthAlbums.filter { monthAlbum in
@@ -190,7 +190,7 @@ struct MonthsGridView: View {
 
                     Spacer()
 
-                    Toggle("Hide Reviewed Albums", isOn: $hideReviewedAlbums)
+                    Toggle("Hide Reviewed Albums", isOn: $isHidingReviewedAlbums)
                         .toggleStyle(.checkbox)
                         .font(.system(size: 13))
                 }

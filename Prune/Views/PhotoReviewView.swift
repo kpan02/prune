@@ -22,7 +22,7 @@ struct PhotoReviewView: View {
 
     @Environment(\.dismiss) private var dismiss
     // Track current photo by ID instead of index for stability
-    @State private var currentPhotoId: String?
+    @State private var currentPhotoID: String?
     @State private var currentImage: NSImage?
     @State private var isCompleted = false
     @State private var imageLoadFailed = false
@@ -30,7 +30,7 @@ struct PhotoReviewView: View {
     @State private var metadata: PhotoMetadata?
     @State private var isBackHovered = false
     @State private var feedback: ReviewFeedback?
-    @State private var hideReviewed = false // Default: show all photos
+    @State private var isHidingReviewed = false // Default: show all photos
     @State private var thumbnailCache: [String: NSImage] = [:]
     @State private var preloadedImages: [String: NSImage] = [:]
     /// Workaround to force SwiftUI view updates when computed properties depend on mutable state.
@@ -49,7 +49,7 @@ struct PhotoReviewView: View {
 
     // Photos to display based on toggle
     private var displayedPhotos: [PHAsset] {
-        if hideReviewed {
+        if isHidingReviewed {
             return allPhotos.filter { !decisionStore.isReviewed($0.localIdentifier) }
         } else {
             return allPhotos
@@ -58,19 +58,19 @@ struct PhotoReviewView: View {
 
     // Current index derived from photo ID
     private var currentIndex: Int {
-        guard let photoId = currentPhotoId else { return 0 }
-        return displayedPhotos.firstIndex(where: { $0.localIdentifier == photoId }) ?? 0
+        guard let photoID = currentPhotoID else { return 0 }
+        return displayedPhotos.firstIndex(where: { $0.localIdentifier == photoID }) ?? 0
     }
 
     private var currentAsset: PHAsset? {
-        guard let photoId = currentPhotoId else { return displayedPhotos.first }
-        return displayedPhotos.first(where: { $0.localIdentifier == photoId })
+        guard let photoID = currentPhotoID else { return displayedPhotos.first }
+        return displayedPhotos.first(where: { $0.localIdentifier == photoID })
     }
 
     private var progressText: String {
         let total = displayedPhotos.count
         let position = total > 0 ? currentIndex + 1 : 0
-        if hideReviewed {
+        if isHidingReviewed {
             return "\(position) / \(total) Unreviewed"
         } else {
             return "\(position) / \(total)"
@@ -143,11 +143,11 @@ struct PhotoReviewView: View {
             loadCurrentImage()
             loadMetadata()
         }
-        .onChange(of: currentPhotoId) {
+        .onChange(of: currentPhotoID) {
             loadCurrentImage()
             loadMetadata()
         }
-        .onChange(of: hideReviewed) { oldValue, newValue in
+        .onChange(of: isHidingReviewed) { oldValue, newValue in
             handleToggleChange(wasHiding: oldValue, nowHiding: newValue)
         }
     }
@@ -157,9 +157,9 @@ struct PhotoReviewView: View {
     private func initializeCurrentPhoto() {
         // Start at first unreviewed photo
         if let firstUnreviewed = allPhotos.first(where: { !decisionStore.isReviewed($0.localIdentifier) }) {
-            currentPhotoId = firstUnreviewed.localIdentifier
+            currentPhotoID = firstUnreviewed.localIdentifier
         } else if let first = allPhotos.first {
-            currentPhotoId = first.localIdentifier
+            currentPhotoID = first.localIdentifier
         }
     }
 
@@ -363,13 +363,13 @@ struct PhotoReviewView: View {
                     ForEach(displayedPhotos, id: \.localIdentifier) { asset in
                         FilmstripThumbnail(
                             asset: asset,
-                            isSelected: asset.localIdentifier == currentPhotoId,
+                            isSelected: asset.localIdentifier == currentPhotoID,
                             decisionStatus: getDecisionStatus(for: asset),
                             thumbnail: thumbnailCache[asset.localIdentifier]
                         )
                         .id(asset.localIdentifier)
                         .onTapGesture {
-                            currentPhotoId = asset.localIdentifier
+                            currentPhotoID = asset.localIdentifier
                         }
                         .onAppear {
                             loadThumbnail(for: asset)
@@ -381,19 +381,19 @@ struct PhotoReviewView: View {
             }
             .frame(height: 80)
             .background(Color(hex: 0xFEFFFC))
-            .onChange(of: currentPhotoId) { _, newId in
-                if let newId = newId {
+            .onChange(of: currentPhotoID) { _, newID in
+                if let newID = newID {
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        scrollProxy.scrollTo(newId, anchor: .center)
+                        scrollProxy.scrollTo(newID, anchor: .center)
                     }
                 }
             }
             .onAppear {
                 // Initial scroll to current position
-                if let photoId = currentPhotoId {
+                if let photoID = currentPhotoID {
                     Task { @MainActor in
                         try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-                        scrollProxy.scrollTo(photoId, anchor: .center)
+                        scrollProxy.scrollTo(photoID, anchor: .center)
                     }
                 }
             }
@@ -535,7 +535,7 @@ struct PhotoReviewView: View {
             // Hide reviewed toggle - bottom right
             HStack {
                 Spacer()
-                Toggle(isOn: $hideReviewed) {
+                Toggle(isOn: $isHidingReviewed) {
                     Text("Hide Reviewed Photos  ")
                         .font(.subheadline)
                 }
@@ -578,18 +578,18 @@ struct PhotoReviewView: View {
 
     private func handleAccept() {
         guard let asset = currentAsset else { return }
-        let photoId = asset.localIdentifier
-        decisionStore.archive(photoId)
+        let photoID = asset.localIdentifier
+        decisionStore.archive(photoID)
         showFeedback(.kept)
-        advanceAfterDecision(from: photoId)
+        advanceAfterDecision(from: photoID)
     }
 
     private func handleDelete() {
         guard let asset = currentAsset else { return }
-        let photoId = asset.localIdentifier
-        decisionStore.trash(photoId)
+        let photoID = asset.localIdentifier
+        decisionStore.trash(photoID)
         showFeedback(.deleted)
-        advanceAfterDecision(from: photoId)
+        advanceAfterDecision(from: photoID)
     }
 
     private func handleClearDecision() {
@@ -613,15 +613,15 @@ struct PhotoReviewView: View {
     /// Without this refetch and update, the favorite button would not reflect the change until
     /// the user navigates away and returns to the album.
     private func handleToggleFavorite() {
-        guard let asset = currentAsset, let photoId = currentPhotoId else { return }
+        guard let asset = currentAsset, let photoID = currentPhotoID else { return }
         photoLibrary.toggleFavorite(for: asset) { success in
             if success {
                 Task { @MainActor in
                     // Refetch the asset to get updated favorite status (PHAsset objects are immutable)
                     let fetchOptions = PHFetchOptions()
-                    if let updatedAsset = PHAsset.fetchAssets(withLocalIdentifiers: [photoId], options: fetchOptions).firstObject {
+                    if let updatedAsset = PHAsset.fetchAssets(withLocalIdentifiers: [photoID], options: fetchOptions).firstObject {
                         // Replace stale asset in allPhotos with updated one
-                        if let index = self.allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
+                        if let index = self.allPhotos.firstIndex(where: { $0.localIdentifier == photoID }) {
                             self.allPhotos[index] = updatedAsset
                         }
                         // Force view update to reflect favorite status change
@@ -633,18 +633,18 @@ struct PhotoReviewView: View {
     }
 
     private func goToNext() {
-        let idx = currentIndex
-        if idx < displayedPhotos.count - 1 {
-            currentPhotoId = displayedPhotos[idx + 1].localIdentifier
+        let index = currentIndex
+        if index < displayedPhotos.count - 1 {
+            currentPhotoID = displayedPhotos[index + 1].localIdentifier
         } else {
             isCompleted = true
         }
     }
 
     private func goToPrevious() {
-        let idx = currentIndex
-        if idx > 0 {
-            currentPhotoId = displayedPhotos[idx - 1].localIdentifier
+        let index = currentIndex
+        if index > 0 {
+            currentPhotoID = displayedPhotos[index - 1].localIdentifier
         }
     }
 
@@ -658,24 +658,24 @@ struct PhotoReviewView: View {
     ///
     /// When "hide reviewed" is disabled, simply advances to the next photo in sequence.
     ///
-    /// - Parameter photoId: The local identifier of the photo that was just reviewed
-    private func advanceAfterDecision(from photoId: String) {
-        if hideReviewed {
+    /// - Parameter photoID: The local identifier of the photo that was just reviewed
+    private func advanceAfterDecision(from photoID: String) {
+        if isHidingReviewed {
             Task { @MainActor in
                 // Brief delay ensures decision store has persisted the change before we filter
                 try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
-                if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
+                if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoID }) {
                     // Search forward for next unreviewed photo
                     for i in (originalIndex + 1) ..< allPhotos.count {
                         if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
-                            currentPhotoId = allPhotos[i].localIdentifier
+                            currentPhotoID = allPhotos[i].localIdentifier
                             return
                         }
                     }
                     // Wrap around: search backward from start if none found forward
                     for i in 0 ..< originalIndex {
                         if !decisionStore.isReviewed(allPhotos[i].localIdentifier) {
-                            currentPhotoId = allPhotos[i].localIdentifier
+                            currentPhotoID = allPhotos[i].localIdentifier
                             return
                         }
                     }
@@ -705,32 +705,32 @@ struct PhotoReviewView: View {
     ///   - wasHiding: Previous state of the hide reviewed toggle (unused, kept for API compatibility)
     ///   - nowHiding: New state of the hide reviewed toggle (unused, kept for API compatibility)
     private func handleToggleChange(wasHiding _: Bool, nowHiding _: Bool) {
-        guard let photoId = currentPhotoId else {
+        guard let photoID = currentPhotoID else {
             // No current photo, select first visible photo
             if let first = displayedPhotos.first {
-                currentPhotoId = first.localIdentifier
+                currentPhotoID = first.localIdentifier
             }
             return
         }
 
         // Current photo is still visible, keep it selected
-        if displayedPhotos.contains(where: { $0.localIdentifier == photoId }) {
+        if displayedPhotos.contains(where: { $0.localIdentifier == photoID }) {
             return
         }
 
         // Current photo is no longer visible, find nearest visible photo
-        if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoId }) {
+        if let originalIndex = allPhotos.firstIndex(where: { $0.localIdentifier == photoID }) {
             // Search forward from original position
             for i in originalIndex ..< allPhotos.count {
                 if displayedPhotos.contains(where: { $0.localIdentifier == allPhotos[i].localIdentifier }) {
-                    currentPhotoId = allPhotos[i].localIdentifier
+                    currentPhotoID = allPhotos[i].localIdentifier
                     return
                 }
             }
             // Wrap around: search backward from start
             for i in stride(from: originalIndex - 1, through: 0, by: -1) {
                 if displayedPhotos.contains(where: { $0.localIdentifier == allPhotos[i].localIdentifier }) {
-                    currentPhotoId = allPhotos[i].localIdentifier
+                    currentPhotoID = allPhotos[i].localIdentifier
                     return
                 }
             }
@@ -738,7 +738,7 @@ struct PhotoReviewView: View {
 
         // Fallback to first visible photo
         if let first = displayedPhotos.first {
-            currentPhotoId = first.localIdentifier
+            currentPhotoID = first.localIdentifier
         } else {
             isCompleted = true
         }
@@ -763,10 +763,10 @@ struct PhotoReviewView: View {
 
     private func loadCurrentImage() {
         guard let asset = currentAsset else { return }
-        let assetId = asset.localIdentifier
+        let assetID = asset.localIdentifier
 
         // Check if already preloaded
-        if let preloaded = preloadedImages[assetId] {
+        if let preloaded = preloadedImages[assetID] {
             currentImage = preloaded
             imageLoadFailed = false
             isLoading = false
@@ -781,8 +781,8 @@ struct PhotoReviewView: View {
         // Add timeout to prevent indefinite loading
         let timeoutTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
-            if currentPhotoId == assetId && currentImage == nil && !imageLoadFailed {
-                Self.logger.warning("Image load timeout for asset: \(assetId, privacy: .public)")
+            if currentPhotoID == assetID && currentImage == nil && !imageLoadFailed {
+                Self.logger.warning("Image load timeout for asset: \(assetID, privacy: .public)")
                 imageLoadFailed = true
                 isLoading = false
             }
@@ -791,18 +791,18 @@ struct PhotoReviewView: View {
         photoLibrary.loadHighQualityImage(for: asset) { image in
             Task { @MainActor in
                 timeoutTask.cancel()
-                guard self.currentPhotoId == assetId else { return }
+                guard self.currentPhotoID == assetID else { return }
 
                 self.isLoading = false
 
                 if let image = image {
                     self.currentImage = image
                     // Also cache the current image so we can navigate back to it quickly
-                    self.preloadedImages[assetId] = image
+                    self.preloadedImages[assetID] = image
                     self.imageLoadFailed = false
                     self.preloadNextImages()
                 } else {
-                    Self.logger.error("Failed to load image for asset: \(assetId, privacy: .public)")
+                    Self.logger.error("Failed to load image for asset: \(assetID, privacy: .public)")
                     self.imageLoadFailed = true
                 }
             }
@@ -826,38 +826,38 @@ struct PhotoReviewView: View {
     /// This balances memory usage with smooth navigation performance.
     private func preloadNextImages() {
         let photos = displayedPhotos
-        guard let currentIdx = photos.firstIndex(where: { $0.localIdentifier == currentPhotoId }) else { return }
+        guard let currentIndex = photos.firstIndex(where: { $0.localIdentifier == currentPhotoID }) else { return }
 
         // Clean up full-quality image cache: keep a sliding window around current position
         // Keep 5 images before current, current image, and 10 images after (16 total)
         let keepBefore = 5
         let keepAfter = 10
-        let startIdx = max(0, currentIdx - keepBefore)
-        let endIdx = min(photos.count - 1, currentIdx + keepAfter)
+        let startIndex = max(0, currentIndex - keepBefore)
+        let endIndex = min(photos.count - 1, currentIndex + keepAfter)
 
-        let keepIds = Set(photos[startIdx ... endIdx].map { $0.localIdentifier })
+        let keepIDs = Set(photos[startIndex ... endIndex].map { $0.localIdentifier })
 
         // Remove images outside the window to free memory
-        preloadedImages = preloadedImages.filter { keepIds.contains($0.key) }
+        preloadedImages = preloadedImages.filter { keepIDs.contains($0.key) }
 
         // Also clean up thumbnail cache with a larger window (thumbnails are smaller)
-        cleanupThumbnailCache(aroundIndex: currentIdx, in: photos)
+        cleanupThumbnailCache(aroundIndex: currentIndex, in: photos)
 
         // Preload next 3 images for smooth forward navigation
         for offset in 1 ... 3 {
-            let nextIdx = currentIdx + offset
-            guard nextIdx < photos.count else { break }
+            let nextIndex = currentIndex + offset
+            guard nextIndex < photos.count else { break }
 
-            let nextAsset = photos[nextIdx]
-            let nextId = nextAsset.localIdentifier
+            let nextAsset = photos[nextIndex]
+            let nextID = nextAsset.localIdentifier
 
             // Skip if already preloaded
-            guard preloadedImages[nextId] == nil else { continue }
+            guard preloadedImages[nextID] == nil else { continue }
 
             photoLibrary.loadHighQualityImage(for: nextAsset) { image in
                 Task { @MainActor in
                     if let image = image {
-                        self.preloadedImages[nextId] = image
+                        self.preloadedImages[nextID] = image
                     }
                 }
             }
