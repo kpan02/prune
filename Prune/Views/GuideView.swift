@@ -10,17 +10,17 @@ struct GuideView: View {
     // MARK: - Layout Constants
     
     // Font Sizes
-    private let sectionHeadingSize: CGFloat = 24
-    private let subsectionHeadingSize: CGFloat = 24
-    private let subheadingSize: CGFloat = 20
     private let bodyTextSize: CGFloat = 16
+    private let sectionHeadingSize: CGFloat = 28
+    private let featureHeadingSize: CGFloat = 24
+    private let subsectionHeadingSize: CGFloat = 20
     
     // Spacing
-    private let sectionSpacing: CGFloat = 40
-    private let sectionInternalSpacing: CGFloat = 10
+    private let sectionSpacing: CGFloat = 45
+    private let sectionInternalSpacing: CGFloat = 8
     private let nestedBulletSpacing: CGFloat = 0
     private let subsectionTopPadding: CGFloat = 8
-    private let hStackSpacing: CGFloat = 8
+    private let subsectionIndent: CGFloat = 20
 
     // Bullet Point Spacing
     private let bulletIndent: CGFloat = 10
@@ -58,7 +58,7 @@ struct GuideView: View {
                     .padding(.bottom, 30)
                     
                     Text("Welcome to Prune")
-                        .font(.system(size: 28, weight: .semibold))
+                        .font(.system(size: sectionHeadingSize, weight: .semibold))
                     
                     Text("Prune is a macOS app designed to help you review and clean your photo library efficiently.")
                         .font(.system(size: bodyTextSize))
@@ -68,7 +68,7 @@ struct GuideView: View {
                 // Requirements
                 VStack(alignment: .leading, spacing: sectionInternalSpacing) {
                     Text("Requirements")
-                        .font(.system(size: sectionHeadingSize, weight: .semibold))
+                        .font(.system(size: featureHeadingSize, weight: .semibold))
                     
                     Text("Prune only works with photos in your Mac's Photos library. Please enable iCloud Photos to sync your iPhone photos to your Mac.")
                         .font(.system(size: bodyTextSize))
@@ -81,14 +81,22 @@ struct GuideView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 
-                // Container for Photo Library Views, Reviewing Photos, Managing Your Decisions, and Dashboard
-                VStack(alignment: .leading, spacing: sectionSpacing+5) {
+                // Container for App Features
+                VStack(alignment: .leading, spacing: sectionSpacing) {
+                // Header 
+                HStack {
+                    Spacer()
+                    Text("App Features")
+                        .font(.system(size: 28, weight: .semibold))
+                    Spacer()
+                }
+
                 // Photo Library Views
                 VStack(alignment: .leading, spacing: sectionInternalSpacing) {
                     Text("Photo Library Views")
-                        .font(.system(size: sectionHeadingSize, weight: .semibold))
+                        .font(.system(size: featureHeadingSize, weight: .semibold))
                     
-                    Text("Prune organizes your photos in three ways to suit different workflows:")
+                    Text("Prune organizes your photos in three ways:")
                         .font(.system(size: bodyTextSize))
                         .fixedSize(horizontal: false, vertical: true)
                     
@@ -118,7 +126,7 @@ struct GuideView: View {
                                 .font(.system(size: bodyTextSize))
                                 .foregroundStyle(.black)
                                 .frame(width: 20, height: bodyTextSize, alignment: .leading)
-                            Text("**Months**: Your entire photo library organized by month and year")
+                            Text("**Months**: Entire photo library organized by month and year")
                                 .font(.system(size: bodyTextSize))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -129,7 +137,7 @@ struct GuideView: View {
                 // Photo Review Mode
                 VStack(alignment: .leading, spacing: sectionInternalSpacing) {
                     Text("Reviewing Photos")
-                        .font(.system(size: sectionHeadingSize, weight: .semibold))
+                        .font(.system(size: featureHeadingSize, weight: .semibold))
                     
                     VStack(alignment: .leading, spacing: sectionInternalSpacing) {
                         HStack(alignment: .firstTextBaseline, spacing: bulletToTextSpacing) {
@@ -153,20 +161,29 @@ struct GuideView: View {
                         HStack(alignment: .firstTextBaseline, spacing: bulletToTextSpacing) {
                             Text("↪")
                                 .font(.system(size: bodyTextSize))
-                            Text("Photos you keep go to **Archive**; photos you delete go to **Trash**")
-                                .font(.system(size: bodyTextSize))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(.leading, bulletSecondaryIndent)
-
-                        HStack(alignment: .firstTextBaseline, spacing: bulletToTextSpacing) {
-                            Text("•")
-                                .font(.system(size: bodyTextSize))
                             Text("Use **arrow keys** to speed through (← → to move, ↑ to Keep, ↓ to Delete)")
                                 .font(.system(size: bodyTextSize))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(.leading, bulletIndent)
+                        .padding(.leading, bulletSecondaryIndent)
+                        
+                        HStack(alignment: .firstTextBaseline, spacing: bulletToTextSpacing) {
+                            Text("↪")
+                                .font(.system(size: bodyTextSize))
+                            HStack(spacing: 0) {
+                                Text("Photos you keep go to **Archive** ")
+                                Image(systemName: "archivebox.fill")
+                                    .font(.system(size: bodyTextSize))
+                                    .baselineOffset(-1)
+                                Text("; photos you delete go to **Trash** ")
+                                Image(systemName: "trash")
+                                    .font(.system(size: bodyTextSize))
+                                    .baselineOffset(-1)
+                            }
+                                .font(.system(size: bodyTextSize))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.leading, bulletSecondaryIndent)
                         
                         HStack(alignment: .firstTextBaseline, spacing: bulletToTextSpacing) {
                             Text("•")
@@ -201,65 +218,105 @@ struct GuideView: View {
                 // Managing Your Decisions
                 VStack(alignment: .leading, spacing: sectionInternalSpacing) {
                     Text("Managing Your Decisions")
-                        .font(.system(size: sectionHeadingSize, weight: .semibold))
+                        .font(.system(size: featureHeadingSize, weight: .semibold))
                     
-                    Text("Prune has two holding areas for your review decisions. Nothing is permanently deleted until you choose.")
+                    Text("Prune has two holding areas for your review decisions:")
                         .font(.system(size: bodyTextSize))
                         .fixedSize(horizontal: false, vertical: true)
                     
                     // Archive subsection
-                    VStack(alignment: .leading, spacing: sectionInternalSpacing) {
-                        Text("Archive")
-                            .font(.system(size: subsectionHeadingSize, weight: .semibold))
-                            .padding(.top, subsectionTopPadding)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 5) {
+                            Text("Archive")
+                            Image(systemName: "archivebox.fill")
+                                .font(.system(size: subsectionHeadingSize))
+                        }
+                        .font(.system(size: subsectionHeadingSize, weight: .semibold))
+                        .padding(.top, subsectionTopPadding)
                         
-                        Text("Photos you mark as **Keep** go to Archive")
+                        Text("Photos you **Keep** go to Archive")
                             .font(.system(size: bodyTextSize))
                             .fixedSize(horizontal: false, vertical: true)
                         
-                        VStack(alignment: .leading, spacing: bulletListSpacing) {
-                            Text("• Archived photos are automatically hidden when you enable **Hide Reviewed** in the photo review mode")
-                                .font(.system(size: bodyTextSize))
-                                .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: sectionInternalSpacing) {
+                            HStack(alignment: .firstTextBaseline, spacing: bulletToTextSpacing) {
+                                Text("•")
+                                    .font(.system(size: bodyTextSize))
+                                Text("Archived photos are automatically hidden when you enable **Hide Reviewed** in the photo review mode")
+                                    .font(.system(size: bodyTextSize))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.leading, bulletIndent)
                             
-                            Text("• Restore individual photos from Archive, or restore all to reset your entire progress")
-                                .font(.system(size: bodyTextSize))
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .firstTextBaseline, spacing: bulletToTextSpacing) {
+                                Text("•")
+                                    .font(.system(size: bodyTextSize))
+                                Text("Restore individual photos from Archive, or **Restore All** to reset your entire progress")
+                                    .font(.system(size: bodyTextSize))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.leading, bulletIndent)
                             
-                            Text("• To unarchive specific months or albums: go to Months or Albums view, toggle **Hide Reviewed Albums** (top right), then hover over the album to reveal the **Unarchive Album** button.")
-                                .font(.system(size: bodyTextSize))
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .firstTextBaseline, spacing: bulletToTextSpacing) {
+                                Text("•")
+                                    .font(.system(size: bodyTextSize))
+                                Text("To unarchive specific months or albums: go to Months or Albums view, toggle **Hide Reviewed Albums** (top right), then hover over the album to reveal the **Unarchive Album** button.")
+                                    .font(.system(size: bodyTextSize))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.leading, bulletIndent)
                         }
                         .padding(.leading, 0)
                     }
+                    .padding(.leading, subsectionIndent)
+                    .padding(.vertical, 10)
                     
                     // Trash subsection
-                    VStack(alignment: .leading, spacing: sectionInternalSpacing) {
-                        Text("Trash")
-                            .font(.system(size: subsectionHeadingSize, weight: .semibold))
-                            .padding(.top, subsectionTopPadding)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 5) {
+                            Text("Trash")
+                            Image(systemName: "trash")
+                                .font(.system(size: subsectionHeadingSize))
+                        }
+                        .font(.system(size: subsectionHeadingSize, weight: .semibold))
+                        .padding(.top, subsectionTopPadding)
                         
-                        Text("Photos you mark as **Delete** go to Trash")
+                        Text("Photos you **Delete** go to Trash")
                             .font(.system(size: bodyTextSize))
                             .fixedSize(horizontal: false, vertical: true)
                         
-                        VStack(alignment: .leading, spacing: bulletListSpacing) {
-                            Text("• Restore individual photos, or restore all from Trash")
-                                .font(.system(size: bodyTextSize))
-                                .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: sectionInternalSpacing) {
+                            HStack(alignment: .firstTextBaseline, spacing: bulletToTextSpacing) {
+                                Text("•")
+                                    .font(.system(size: bodyTextSize))
+                                Text("**Empty Trash** to permanently delete all trashed photos. They'll be sent to Recently Deleted in your Photos library (standard Photos behavior)")
+                                    .font(.system(size: bodyTextSize))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.leading, bulletIndent)
                             
-                            Text("• **Empty Trash** to permanently delete all trashed photos. They'll be sent to Recently Deleted in your Photos library (standard Photos behavior)")
-                                .font(.system(size: bodyTextSize))
-                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(alignment: .firstTextBaseline, spacing: bulletToTextSpacing) {
+                                Text("•")
+                                    .font(.system(size: bodyTextSize))
+                                Text("Restore individual photos, or **Restore All** from Trash")
+                                    .font(.system(size: bodyTextSize))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.leading, bulletIndent)
                         }
                         .padding(.leading, 0)
                     }
+                    .padding(.leading, subsectionIndent)
                 }
                 
                 // Dashboard
                 VStack(alignment: .leading, spacing: sectionInternalSpacing) {
-                    Text("Dashboard")
-                        .font(.system(size: sectionHeadingSize, weight: .semibold))
+                    HStack(spacing: 8) {
+                        Text("Dashboard")
+                            .font(.system(size: featureHeadingSize, weight: .semibold))
+                        Image(systemName: "chart.bar.fill")
+                            .font(.system(size: featureHeadingSize-5))
+                    }
                     
                     Text("Track your review progress and photo library statistics")
                         .font(.system(size: bodyTextSize))
@@ -290,28 +347,32 @@ struct GuideView: View {
                             .font(.system(size: bodyTextSize))
                             .fixedSize(horizontal: false, vertical: true)
                         
-                        Text("Prune saves only your review decisions (which photos you kept or deleted), and it stores them locally on your Mac. This data is stored in ~/Library/Application Support/Prune/decisions.json and never leaves your device. This file only contains photo IDs, no images or metadata.")
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Prune only saves your review decisions (which photos you kept or deleted), and it stores them locally on your Mac. This data is stored in ~/Library/Application Support/Prune/decisions.json and never leaves your device. This file only contains photo IDs; no images or metadata.")
+                                .font(.system(size: bodyTextSize))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                             .font(.system(size: bodyTextSize))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 
                 // GitHub link
-                HStack(alignment: .top, spacing: hStackSpacing) {
+                HStack(alignment: .top, spacing: 5) {
                     Text("🤓")
-                        .font(.system(size: bodyTextSize))
+                        .font(.system(size: 14))
                     HStack(spacing: nestedBulletSpacing) {
-                        Text("Interested in this project? Check out the repo here: ")
-                            .font(.system(size: bodyTextSize))
+                        Text("Interested in this project? Check out the repo: ")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         Link("https://github.com/kpan02/prune", destination: URL(string: "https://github.com/kpan02/prune")!)
-                            .font(.system(size: bodyTextSize))
+                            .font(.system(size: 14))
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 40)
 
-            Spacer()
-                .frame(height: 10)
             }
             .frame(maxWidth: maxContentWidth) // Constrain width for centered, readable content
             Spacer()

@@ -24,7 +24,7 @@ enum SidebarTab: String, CaseIterable {
         case .trash: return "trash"
         case .dashboard: return "chart.bar.fill"
         case .archive: return "archivebox.fill"
-        case .help: return "💡"
+        case .help: return "checkmark.seal.fill"
         }
     }
     
