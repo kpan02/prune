@@ -29,6 +29,7 @@ struct PhotoReviewView: View {
     @State private var feedback: ReviewFeedback?
     @State private var hideReviewed = false  // Default: show all photos
     @State private var thumbnailCache: [String: NSImage] = [:]
+    @State private var preloadedImages: [String: NSImage] = [:]
     @State private var refreshTrigger = UUID()  
     
     init(albumTitle: String, photos: [PHAsset], photoLibrary: PhotoLibraryManager, decisionStore: PhotoDecisionStore) {
@@ -697,16 +698,24 @@ struct PhotoReviewView: View {
     
     private func loadCurrentImage() {
         guard let asset = currentAsset else { return }
+        let assetId = asset.localIdentifier
+        
+        // Check if already preloaded
+        if let preloaded = preloadedImages[assetId] {
+            currentImage = preloaded
+            imageLoadFailed = false
+            isLoading = false
+            preloadNextImages()
+            return
+        }
+        
         currentImage = nil
         imageLoadFailed = false
         isLoading = true
         
-        let assetId = asset.localIdentifier
-        
         // Add timeout to prevent indefinite loading
         let timeoutTask = DispatchWorkItem {
             DispatchQueue.main.async {
-                // Only apply timeout if still on same photo
                 if self.currentPhotoId == assetId && self.currentImage == nil && !self.imageLoadFailed {
                     print("Image load timeout for asset: \(assetId)")
                     self.imageLoadFailed = true
@@ -719,7 +728,6 @@ struct PhotoReviewView: View {
         photoLibrary.loadHighQualityImage(for: asset) { image in
             DispatchQueue.main.async {
                 timeoutTask.cancel()
-                // Only update if still on same photo
                 guard self.currentPhotoId == assetId else { return }
                 
                 self.isLoading = false
@@ -727,9 +735,35 @@ struct PhotoReviewView: View {
                 if let image = image {
                     self.currentImage = image
                     self.imageLoadFailed = false
+                    self.preloadNextImages()
                 } else {
                     print("Failed to load image for asset: \(assetId)")
                     self.imageLoadFailed = true
+                }
+            }
+        }
+    }
+    
+    private func preloadNextImages() {
+        let photos = displayedPhotos
+        guard let currentIdx = photos.firstIndex(where: { $0.localIdentifier == currentPhotoId }) else { return }
+        
+        // Preload next 3 images
+        for offset in 1...3 {
+            let nextIdx = currentIdx + offset
+            guard nextIdx < photos.count else { break }
+            
+            let nextAsset = photos[nextIdx]
+            let nextId = nextAsset.localIdentifier
+            
+            // Skip if already preloaded
+            guard preloadedImages[nextId] == nil else { continue }
+            
+            photoLibrary.loadHighQualityImage(for: nextAsset) { image in
+                DispatchQueue.main.async {
+                    if let image = image {
+                        self.preloadedImages[nextId] = image
+                    }
                 }
             }
         }
